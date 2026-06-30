@@ -1,0 +1,50 @@
+<h1>シフト管理システム</h1>
+
+<div style="display: flex; gap: 20px; margin-top: 20px;">
+  
+  <div style="border: 1px solid #ccc; padding: 20px; border-radius: 8px; width: 200px;">
+    <h3>従業員管理</h3>
+    <p>スタッフの登録や、雇用形態の設定を行います。</p>
+    <%= link_to "従業員一覧へ", staffs_path, style: "display: block; margin-top: 10px;" %>
+  </div>
+
+  <div style="border: 1px solid #ccc; padding: 20px; border-radius: 8px; width: 200px;">
+    <h3>必要人数設定</h3>
+    <p>各曜日の時間帯ごとに必要な人数を管理します。</p>
+    <%= link_to "人数設定へ", "#", style: "display: block; margin-top: 10px;" %>
+  </div>
+
+  <div style="border: 1px solid #ccc; padding: 20px; border-radius: 8px; width: 200px;">
+    <h3>希望休の確認</h3>
+    <p>従業員からの休み希望を一覧で確認します。</p>
+    <%= link_to "希望休一覧へ", "#", style: "display: block; margin-top: 10px;" %>
+  </div>
+
+  <div style="border: 1px solid #ccc; padding: 20px; border-radius: 8px; width: 220px;">
+  <h3>公休日設定</h3>
+  <p style="font-size: 13px; color: #666;">店舗全体とスタッフ個別の固定休みを管理します。</p>
+
+  <%# 店全体の定休日設定 %>
+  <%= link_to "🏠 店の公休日設定", "#", 
+            style: "display: block; margin-top: 15px; color: #007bff; font-weight: bold; text-decoration: none;" %>
+
+  <%# スタッフ個別の公休日設定 %>
+  <%= link_to "👤 スタッフの公休日設定", "#", 
+                style: "display: block; margin-top: 12px; color: #28a745; font-weight: bold; text-decoration: none;" %>
+</div>
+
+</div>
+
+<hr style="margin-top: 40px;">
+
+<div style="margin-top: 20px;">
+  <h2>シミュレーション</h2>
+  <p>必要な人数と希望休をもとに、現在の過不足状況を15分刻みで確認します。</p>
+  
+  <%# shifts_path へのリンクに変更し、Turboをオフにする設定を追加 %>
+  <%= link_to "シミュレーションを表示", sims_path, 
+      style: "display: inline-block; background: #007bff; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; margin-top: 10px;",
+      data: { turbo: false } %>
+</div>
+
+<hr style="margin-top: 40px;">
