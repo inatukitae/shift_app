@@ -10,6 +10,50 @@
   <% end %>
 </div>
 
+<h3>希望休の確認</h3>
+<table border="1">
+  <thead>
+    <tr>
+      <th>スタッフ名</th>
+      <th>希望日</th>
+      <th>種別</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @shift_requests.each do |req| %>
+      <tr>
+        <td><%= req.staff.name %></td>
+        <td><%= req.request_date %></td>
+        <td><%= req.request_type_label %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<h3>営業時間確認</h3>
+<table border="1">
+  <thead>
+    <tr>
+      <th>曜日</th>
+      <th>開店時間</th>
+      <th>閉店時間</th>
+      <th>定休日</th>
+      <th>祝日営業</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @work_settings_list.each do |setting| %>
+      <tr>
+        <td><%= I18n.t('date.day_names')[setting.day_of_week] %></td>
+        <td><%= setting.open_time&.strftime("%H:%M") %></td>
+        <td><%= setting.close_time&.strftime("%H:%M") %></td>
+        <td><%= setting.is_closed ? "定休日" : "営業" %></td>
+        <td><%= setting.is_holiday_open ? "営業" : "休業" %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
 <h3>休日確認カレンダー</h3>
 
 <%= form_with url: sims_path, local: true do |f| %>
@@ -25,18 +69,36 @@
       <% @calendar_days.each_slice(7) do |week| %>
         <tr>
           <% week.each do |date| %>
-            <% is_in_range = (date >= @start_date && date <= @end_date) %>
+            <% 
+              is_in_range = (date >= @start_date && date <= @end_date)
+              setting = @work_settings_map[date.wday]
+              is_closed = setting&.is_closed
+            %>
             <td style="padding: 10px; background-color: <%= is_in_range ? '#ffffff' : '#fcfcfc' %>; vertical-align: top; height: 120px; width: 14%; border: 1px solid #eee;">
               <div style="font-weight: bold; margin-bottom: 8px; color: <%= is_in_range ? '#333' : '#bbb' %>;"><%= date.strftime("%m/%d") %></div>
-              
-              <% if is_in_range && @staff_assignments[date] %>
-                <div style="margin-bottom: 10px;">
-                  <% @staff_assignments[date].each do |staff| %>
-                    <div style="font-size: 0.8em; color: #28a745; background: #e8f5e9; margin-bottom: 3px; padding: 2px 6px; border-radius: 4px;">
-                      <%= staff.name %>
-                    </div>
-                  <% end %>
-                </div>
+
+              <% if is_in_range && is_closed %>
+                <div style="color: #666; font-size: 0.9em; font-weight: bold; margin-top: 10px;">定休日</div>
+              <% else %>
+                <% if @requests_by_date[date] %>
+                  <div style="margin-bottom: 5px; border-bottom: 1px solid #ffcdd2;">
+                    <% @requests_by_date[date].each do |req| %>
+                      <div style="font-size: 0.7em; color: #d32f2f; background: #ffebee; margin-bottom: 2px; padding: 1px 4px; border-radius: 4px;">
+                        <%= req.request_type_label %>: <%= req.staff.name %>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+                
+                <% if @staff_assignments[date] %>
+  <div style="margin-bottom: 10px;">
+    <% @staff_assignments[date].each do |staff| %>
+      <div style="font-size: 0.8em; color: #28a745; background: #e8f5e9; margin-bottom: 3px; padding: 2px 6px; border-radius: 4px;">
+        <%= staff.name %>
+      </div>
+    <% end %>
+  </div>
+<% end %>
               <% end %>
             </td>
           <% end %>

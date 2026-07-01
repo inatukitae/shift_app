@@ -11,26 +11,21 @@
   <div style="border: 1px solid #ccc; padding: 20px; border-radius: 8px; width: 200px;">
     <h3>必要人数設定</h3>
     <p>各曜日の時間帯ごとに必要な人数を管理します。</p>
-    <%= link_to "人数設定へ", "#", style: "display: block; margin-top: 10px;" %>
+    <%= link_to "人数設定へ", required_staff_settings_path, style: "display: block; margin-top: 10px;" %>
   </div>
 
   <div style="border: 1px solid #ccc; padding: 20px; border-radius: 8px; width: 200px;">
     <h3>希望休の確認</h3>
     <p>従業員からの休み希望を一覧で確認します。</p>
-    <%= link_to "希望休一覧へ", "#", style: "display: block; margin-top: 10px;" %>
+    <%= link_to "希望休一覧へ", shift_requests_path, style: "display: block; margin-top: 10px;" %>
   </div>
 
   <div style="border: 1px solid #ccc; padding: 20px; border-radius: 8px; width: 220px;">
-  <h3>公休日設定</h3>
-  <p style="font-size: 13px; color: #666;">店舗全体とスタッフ個別の固定休みを管理します。</p>
+  <h3>勤務時間設定</h3>
+  <p style="font-size: 13px; color: #666;">店舗の公休日と勤務時間を設定します。</p>
 
   <%# 店全体の定休日設定 %>
-  <%= link_to "🏠 店の公休日設定", "#", 
-            style: "display: block; margin-top: 15px; color: #007bff; font-weight: bold; text-decoration: none;" %>
-
-  <%# スタッフ個別の公休日設定 %>
-  <%= link_to "👤 スタッフの公休日設定", "#", 
-                style: "display: block; margin-top: 12px; color: #28a745; font-weight: bold; text-decoration: none;" %>
+  <%= link_to "勤務時間設定へ", work_settings_path, style: "display: block; margin-top: 10px;" %>
 </div>
 
 </div>

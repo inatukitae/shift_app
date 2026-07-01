@@ -1,0 +1,29 @@
+<h1>希望休一覧</h1>
+
+<%= link_to '新規申請を作成', new_shift_request_path %>
+
+<table border="1">
+  <thead>
+    <tr>
+      <th>スタッフ名</th>
+      <th>希望日</th>
+      <th>種別</th>
+      <th>状態</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @shift_requests.each do |shift_request| %>
+      <tr>
+        <td><%= shift_request.staff.name %></td>
+        <td><%= shift_request.request_date %></td>
+        <td><%= shift_request.request_type_label %></td>
+        <td><%= shift_request.status_label %></td>
+        <td>
+          <%= link_to '編集', edit_shift_request_path(shift_request) %> |
+          <%= button_to '削除', shift_request_path(shift_request), method: :delete, data: { confirm: '本当に削除しますか？' } %>
+        </td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>

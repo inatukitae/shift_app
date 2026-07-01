@@ -1,0 +1,2 @@
+class WorkSetting < ApplicationRecord
+end

@@ -1,0 +1,84 @@
+<h1>必要人数設定</h1>
+
+
+<h2>シフト枠一覧</h2>
+<% (0..6).each do |wday| %>
+    
+  <h3><%= I18n.t('date.day_names')[wday] %></h3>
+  <table border="1" style="border-collapse: collapse; width: 500px;">
+    <tr style="background-color: #f2f2f2;">
+      <th>増加開始時間</th>
+      <th>減少終了時間</th>
+      <th>シフト枠</th>
+      <th>必要人数差分</th>
+      <th>勤務時間</th>
+      <th>操作</th>
+    </tr>
+    <% 
+      increases = @increase_data[wday] || []
+      decreases = @decrease_data[wday] || []
+      max_rows = [increases.length, decreases.length].max
+    %>
+    <% (0...max_rows).each do |i| %>
+  <% inc = increases[i] %>
+  <% dec = decreases[i] %>
+  <tr>
+    <td style="text-align: center;"><%= inc ? inc[:time] : "" %></td>
+    <td style="text-align: center;"><%= dec ? dec[:time] : "" %></td>
+    <td style="text-align: center;"><%= inc && dec ? "#{inc[:time]} ～ #{dec[:time]}" : "" %></td>
+    <td style="text-align: center;"><%= inc ? "#{@diff_data[wday][inc[:time]]} 人" : "" %></td>
+    
+
+
+
+    <%# 勤務時間の表示 %>
+    <td style="text-align: center;">
+      <%# キーを "#{wday}_#{inc[:time]}" から "#{wday}_#{i}" に変更 %>
+      <% pair_key = "#{wday}_#{i}" %>
+      <% if @working_hours && @working_hours[pair_key] %>
+        <% total = @working_hours[pair_key] %>
+        <%= "#{total / 60}時間#{total % 60}分" %>
+      <% end %>
+    </td>
+    
+    <td style="text-align: center;">
+      <% if inc&.dig(:id).present? %>
+        <%= button_to '削除', required_staff_setting_path(inc[:id]), method: :delete, data: { confirm: '削除しますか？' } %>
+      <% end %>
+    </td>
+  </tr>
+<% end %>
+  </table>
+<% end %>
+
+<h2>曜日別設定一覧</h2>
+
+<% (0..6).each do |wday| %>
+  <h3><%= I18n.t('date.day_names')[wday] %></h3>
+  
+  <table border="1" style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+    <tr><th>時間帯</th><th>必要人数</th><th>操作</th></tr>
+    <% (@settings[wday] || []).each do |setting| %>
+      <tr>
+        <td><%= setting.start_time.strftime("%H:%M") %> 〜 <%= setting.end_time.strftime("%H:%M") %></td>
+        <td><%= setting.required_count %> 人</td>
+        <td>
+          <%= link_to '編集', edit_required_staff_setting_path(setting) %> |
+          <%= button_to '削除', required_staff_setting_path(setting), method: :delete, data: { confirm: '本当に削除しますか？' } %>
+        </td>
+      </tr>
+    <% end %>
+  </table>
+
+  <%# その曜日専用の追加フォーム %>
+  <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 30px; border: 1px solid #dee2e6;">
+    <strong><%= I18n.t('date.day_names')[wday] %>に枠を追加:</strong>
+    <%= form_with model: @new_setting, local: true do |f| %>
+      <%= f.hidden_field :day_of_week, value: wday %>
+      <%= f.time_field :start_time, required: true %> 〜
+      <%= f.time_field :end_time, required: true %>
+      <%= f.number_field :required_count, placeholder: "人数", min: 0, required: true, style: "width: 60px;" %>
+      <%= f.submit "追加" %>
+    <% end %>
+  </div>
+<% end %>

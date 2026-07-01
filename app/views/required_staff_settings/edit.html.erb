@@ -1,0 +1,26 @@
+<h1>設定の編集</h1>
+
+<% if @required_staff_setting.present? %>
+  <%= form_with model: @required_staff_setting, url: @required_staff_setting.persisted? ? required_staff_setting_path(@required_staff_setting) : required_staff_settings_path do |f| %>
+    <div>
+      <%= f.label :day_of_week, "曜日" %>
+      <%= f.select :day_of_week, [['日曜日', 0], ['月曜日', 1], ['火曜日', 2], ['水曜日', 3], ['木曜日', 4], ['金曜日', 5], ['土曜日', 6]] %>
+    </div>
+    <div>
+      <%= f.label :start_time, "開始" %>
+      <%= f.time_field :start_time %>
+    </div>
+    <div>
+      <%= f.label :end_time, "終了" %>
+      <%= f.time_field :end_time %>
+    </div>
+    <div>
+      <%= f.label :required_count, "必要人数" %>
+      <%= f.number_field :required_count, min: 0 %>
+    </div>
+    <%= f.submit "更新する" %>
+    <%= link_to '戻る', required_staff_settings_path %>
+  <% end %>
+<% else %>
+  <p>エラー: データが見つかりませんでした。</p>
+<% end %>

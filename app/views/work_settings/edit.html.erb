@@ -1,0 +1,29 @@
+<h1><%= I18n.t('date.day_names')[@work_setting.day_of_week] %> の設定編集</h1>
+
+<%= form_with model: @work_setting, local: true do |f| %>
+  <div>
+    <%= f.label :is_closed, "定休日にする" %>
+    <%= f.check_box :is_closed %>
+  </div>
+
+  <div>
+    <%= f.label :open_time, "開店時間" %>
+    <%= f.time_field :open_time %>
+  </div>
+
+  <div>
+    <%= f.label :close_time, "閉店時間" %>
+    <%= f.time_field :close_time %>
+  </div>
+
+  <div>
+    <%= f.label :is_holiday_open, "祝日は営業する" %>
+    <%= f.check_box :is_holiday_open %>
+  </div>
+
+  <div>
+    <%= f.submit "保存する" %>
+  </div>
+<% end %>
+
+<%= link_to '戻る', work_settings_path %>

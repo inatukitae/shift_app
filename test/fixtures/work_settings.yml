@@ -1,0 +1,13 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  day_of_week: 1
+  open_time: 2026-07-01 11:55:07
+  close_time: 2026-07-01 11:55:07
+  is_closed: false
+
+two:
+  day_of_week: 1
+  open_time: 2026-07-01 11:55:07
+  close_time: 2026-07-01 11:55:07
+  is_closed: false

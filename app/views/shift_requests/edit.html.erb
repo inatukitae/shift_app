@@ -1,0 +1,32 @@
+<h1>希望休の編集</h1>
+
+<%= form_with model: @shift_request, local: true do |f| %>
+  <div>
+    <%= f.label :staff_id, "スタッフ" %>
+    <%= f.collection_select :staff_id, Staff.all, :id, :name %>
+  </div>
+
+  <div>
+    <%= f.label :request_date, "希望日" %>
+    <%= f.date_field :request_date %>
+  </div>
+
+  <div>
+    <%= f.label :request_type, "休みの種別" %>
+    <%= f.select :request_type, 
+             ShiftRequest.request_types.keys.map { |k| [I18n.t("enums.shift_request.request_type.#{k}"), k] }, 
+             {}, 
+             { class: 'form-control' } %>
+  </div>
+
+  <div>
+    <%= f.label :status, "状態" %>
+    <%= f.select :status, ShiftRequest.statuses.keys.map { |k| [I18n.t("enums.shift_request.status.#{k}"), k] } %>
+  </div>
+
+  <div>
+    <%= f.submit "更新する" %>
+  </div>
+<% end %>
+
+<%= link_to '戻る', shift_requests_path %>

@@ -1,0 +1,27 @@
+<h1>希望休の新規申請</h1>
+
+<%= form_with model: @shift_request, local: true do |f| %>
+  <div>
+    <%= f.label :staff_id, "スタッフ" %>
+    <%= f.collection_select :staff_id, Staff.all, :id, :name, prompt: "選択してください" %>
+  </div>
+
+  <div>
+    <%= f.label :request_date, "希望日" %>
+    <%= f.date_field :request_date %>
+  </div>
+
+  <div>
+    <%= f.label :request_type, "休みの種別" %>
+    <%= f.select :request_type, ShiftRequest.request_types.keys.map { |k| [I18n.t("enums.shift_request.request_type.#{k}"), k] } %>
+  </div>
+
+  <%# 状態はデフォルトでpending(0)としてサーバー側で生成されますが、明示的に持たせる場合 %>
+  <%= f.hidden_field :status, value: :pending %>
+
+  <div>
+    <%= f.submit "申請する" %>
+  </div>
+<% end %>
+
+<%= link_to '戻る', shift_requests_path %>

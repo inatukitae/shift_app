@@ -1,0 +1,26 @@
+<h1>勤務時間設定</h1>
+
+<table border="1">
+  <thead>
+    <tr>
+      <th>曜日</th>
+      <th>開店時間</th>
+      <th>閉店時間</th>
+      <th>定休日</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @work_settings.each do |setting| %>
+      <tr>
+        <td><%= I18n.t('date.day_names')[setting.day_of_week] %></td>
+        <td><%= setting.open_time&.strftime("%H:%M") %></td>
+        <td><%= setting.close_time&.strftime("%H:%M") %></td>
+        <td><%= setting.is_closed ? "定休日" : "営業" %></td>
+        <td><%= link_to '編集', edit_work_setting_path(setting) %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to 'トップページへ戻る', root_path %>
