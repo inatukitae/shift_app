@@ -54,6 +54,52 @@
   </tbody>
 </table>
 
+<h3>シフト枠一覧</h3>
+<table border="1" style="border-collapse: collapse; width: 100%;">
+  <tr style="background-color: #f2f2f2;">
+    <th>No.</th>  <%# 1. ヘッダーにNo.列を追加 %>
+    <th>曜日</th>
+    <th>増加開始時間</th>
+    <th>減少終了時間</th>
+    <th>シフト枠</th>
+    <th>必要人数差分</th>
+    <th>勤務時間</th>
+  </tr>
+  <% 
+    row_number = 1 # 2. カウンターを初期化
+  %>
+  <% (0..6).each do |wday| %>
+    <% 
+      increases = @increase_data[wday] || []
+      decreases = @decrease_data[wday] || []
+      max_rows = [increases.length, decreases.length].max
+    %>
+    <% (0...max_rows).each do |i| %>
+      <% inc = increases[i] %>
+      <% dec = decreases[i] %>
+      <tr>
+        <td style="text-align: center;"><%= row_number %></td> <%# 3. 番号を表示 %>
+        <% if i == 0 %>
+          <td rowspan="<%= max_rows %>" style="text-align: center; font-weight: bold;"><%= I18n.t('date.day_names')[wday] %></td>
+        <% end %>
+        <td style="text-align: center;"><%= inc ? inc[:time] : "" %></td>
+        <td style="text-align: center;"><%= dec ? dec[:time] : "" %></td>
+        <td style="text-align: center;"><%= inc && dec ? "#{inc[:time]} ～ #{dec[:time]}" : "" %></td>
+        <td style="text-align: center;"><%= inc ? "#{@diff_data[wday][inc[:time]]} 人" : "" %></td>
+        <td style="text-align: center;">
+          <% pair_key = "#{wday}_#{i}" %>
+          <% if @working_hours && @working_hours[pair_key] %>
+            <% total = @working_hours[pair_key] %>
+            <%= "#{total / 60}時間#{total % 60}分" %>
+          <% end %>
+        </td>
+      </tr>
+      <% row_number += 1 %> <%# 4. カウンターをインクリメント %>
+    <% end %>
+  <% end %>
+</table>
+
+
 <h3>休日確認カレンダー</h3>
 
 <%= form_with url: sims_path, local: true do |f| %>
@@ -113,3 +159,245 @@
     <%= f.submit "シフトを確定する", style: "padding: 12px 25px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;" %>
   </div>
 <% end %>
+
+
+
+<h3>シフト枠確認</h3>
+<div style="overflow-x: auto; margin-bottom: 50px;">
+  <table border="1" style="border-collapse: collapse; width: 100%; font-size: 0.75em; text-align: center;">
+    <thead>
+      <tr style="background: #f2f2f2;">
+        <th>日付</th>
+        <th>休み</th>
+        <%# 1. 表示する列数を決定 %>
+        <% max_cols = (0..6).map { |wday| [(@increase_data[wday] || []).length, (@decrease_data[wday] || []).length].max }.max %>
+        <% (1..max_cols).each do |n| %>
+          <th style="padding: 5px; min-width: 50px;">シフト枠<%= n %></th>
+        <% end %>
+        <th>自由枠</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @calendar_days.each do |date| %>
+        <% next unless date >= @start_date && date <= @end_date %>
+        <% 
+          is_closed = @work_settings_map[date.wday]&.is_closed
+          assigned_holidays = @staff_assignments[date.to_date] || []
+          
+          # 曜日ごとの枠データ
+          increases = @increase_data[date.wday] || []
+          decreases = @decrease_data[date.wday] || []
+          num_of_slots = [increases.length, decreases.length].max
+        %>
+        <tr>
+          <td style="padding: 5px; font-weight: bold;">
+            <%= date.strftime("%m/%d") %> (<%= I18n.t('date.abbr_day_names')[date.wday] %>)
+          </td>
+          
+          <td style="padding: 5px; text-align: left; vertical-align: top;">
+            <% if is_closed %><div>定休</div><% end %>
+            <% (@requests_by_date[date.to_date] || []).each do |req| %>
+              <div style="color: #d32f2f;">休: <%= req.staff.name %></div>
+            <% end %>
+            <% assigned_holidays.each do |staff| %>
+              <div style="color: #e67e22;">休: <%= staff.name %></div>
+            <% end %>
+          </td>
+          
+          <%# 2. 枠を表示 %>
+          <% (0...max_cols).each do |i| %>
+            <td style="border: 1px solid #eee; background: <%= is_closed ? '#f9f9f9' : '#fff' %>;">
+              <% if !is_closed && i < num_of_slots %>
+                <% 
+                   previous_wday_counts = (0...date.wday).sum { |w| [(@increase_data[w]||[]).length, (@decrease_data[w]||[]).length].max }
+                   display_no = previous_wday_counts + i + 1 
+                   
+                   # 出勤可能なスタッフを取得
+                   available = @staffs.reject { |s| assigned_holidays.include?(s) || (@requests_by_date[date.to_date] || []).map(&:staff_id).include?(s.id) }
+                   
+                   if available.empty?
+                     staff = nil
+                   else
+                     # ローテーション用のインデックス計算
+                     active_dates = @calendar_days.select { |d| d >= @start_date && d <= @end_date && !(@work_settings_map[d.wday]&.is_closed) }
+                     current_index = active_dates.index(date) || 0
+                     rotated = available.rotate(current_index)
+                     
+                     # --- 修正箇所: スタッフ数に応じた配置 ---
+                     if available.size == 1
+                       # スタッフが1人の場合：枠2(i=1)にのみ表示、枠1(i=0)は空白
+                       staff = (i == 1) ? rotated[0] : nil
+                     else
+                       # スタッフが2人以上の場合：順番通りに枠へ表示
+                       staff = rotated[i]
+                     end
+                   end
+                %>
+                
+                <div style="display: flex; flex-direction: column; align-items: center; padding: 2px;">
+                  <div style="font-weight: bold; color: #555; font-size: 0.8em;">
+                    <%= display_no %>
+                  </div>
+                  <div style="margin-top: 3px; color: #28a745; background: #e8f5e9; padding: 1px 6px; border-radius: 4px; font-size: 0.8em; min-width: 40px;">
+                    <%= staff ? staff.name : "-" %>
+                  </div>
+                </div>
+              <% end %>
+            </td>
+          <% end %>
+          <%# 自由枠のセル %>
+          <td style="border: 1px solid #eee; padding: 2px;">
+            <% if !is_closed %>
+              <% 
+                 # 1. 休みではない全スタッフを取得
+                 available = @staffs.reject { |s| assigned_holidays.include?(s) || (@requests_by_date[date.to_date] || []).map(&:staff_id).include?(s.id) }
+                 
+                 # 2. 現在「シフト枠」に表示されているスタッフIDを取得（nilを除外）
+                 # ループ内で使った rotated[i] のスタッフを特定するのは複雑なため、
+                 # その日全体の割り当てを算出します
+                 active_dates = @calendar_days.select { |d| d >= @start_date && d <= @end_date && !(@work_settings_map[d.wday]&.is_closed) }
+                 current_index = active_dates.index(date) || 0
+                 rotated = available.rotate(current_index)
+                 
+                 # シフト枠に表示されるスタッフ名の配列を作成
+                 assigned_to_slots = if available.size == 1
+                                       [nil, rotated[0]]
+                                     else
+                                       rotated.first(num_of_slots)
+                                     end
+                 
+                 # 3. available から assigned_to_slots に含まれるスタッフを除外
+                 free_staffs = available.reject { |s| assigned_to_slots.include?(s) }
+              %>
+              
+              <% free_staffs.each do |staff| %>
+                <div style="font-size: 0.8em; color: #666; background: #f0f0f0; padding: 1px 4px; margin: 1px; border-radius: 4px; display: inline-block;">
+                  <%= staff.name %>
+                </div>
+              <% end %>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
+
+<% 
+  # --- 15分刻みの時間ヘッダーを配列として生成（theadとtbody両方で使うため） ---
+  all_open_times = @work_settings_list.map(&:open_time).compact.map { |t| Time.parse(t.strftime("%H:%M")) }
+  all_close_times = @work_settings_list.map(&:close_time).compact.map { |t| Time.parse(t.strftime("%H:%M")) }
+  
+  min_start = all_open_times.min
+  max_end = all_close_times.max
+  
+  time_slots = []
+  if min_start && max_end
+    current_time = min_start
+    while current_time <= max_end
+      time_slots << current_time.strftime("%H:%M")
+      current_time += 15.minutes
+    end
+  end
+%>
+
+<h3>出勤時間確認</h3>
+<div style="overflow-x: auto; margin-bottom: 50px;">
+  <table border="1" style="border-collapse: collapse; width: 100%; font-size: 0.75em; text-align: center;">
+    <thead>
+      <tr style="background: #f2f2f2;">
+        <th style="padding: 10px; min-width: 60px;">日付</th>
+        <th style="padding: 10px; min-width: 60px;">休み</th>
+        <%# 生成した時間をヘッダーに配置 %>
+        <% time_slots.each do |time_str| %>
+          <th style="padding: 2px; font-size: 0.7em; min-width: 35px;"><%= time_str %></th>
+        <% end %>
+      </tr>
+    </thead>
+    <tbody>
+      <% @calendar_days.each do |date| %>
+        <% next unless date >= @start_date && date <= @end_date %>
+        <% 
+          is_closed = @work_settings_map[date.wday]&.is_closed
+          assigned_holidays = @staff_assignments[date.to_date] || []
+          increases = @increase_data[date.wday] || []
+          decreases = @decrease_data[date.wday] || []
+          num_of_slots = [increases.length, decreases.length].max
+          
+          # --- 1. その日のシフト枠と担当者の組み合わせを事前に構築 ---
+          daily_slots = []
+          if !is_closed && num_of_slots > 0
+            # 表示番号の計算用ベース
+            previous_wday_counts = (0...date.wday).sum { |w| [(@increase_data[w]||[]).length, (@decrease_data[w]||[]).length].max }
+            
+            # 出勤可能なスタッフ
+            available = @staffs.reject { |s| assigned_holidays.include?(s) || (@requests_by_date[date.to_date] || []).map(&:staff_id).include?(s.id) }
+            
+            # ローテーション
+            active_dates = @calendar_days.select { |d| d >= @start_date && d <= @end_date && !(@work_settings_map[d.wday]&.is_closed) }
+            current_index = active_dates.index(date) || 0
+            rotated = available.rotate(current_index)
+            
+            # 各枠の開始・終了時間とスタッフをセットにする
+            (0...num_of_slots).each do |i|
+              staff = if available.size == 1
+                        (i == 1) ? rotated[0] : nil
+                      else
+                        rotated[i]
+                      end
+              
+              if staff
+                start_time = increases[i] ? increases[i][:time] : nil
+                end_time = decreases[i] ? decreases[i][:time] : nil
+                display_no = previous_wday_counts + i + 1
+                
+                # 時間が設定されている場合のみ配列に追加
+                if start_time && end_time
+                  daily_slots << { no: display_no, staff: staff, start_time: start_time, end_time: end_time }
+                end
+              end
+            end
+          end
+        %>
+        
+        <tr>
+          <%# 日付 %>
+          <td style="padding: 5px; font-weight: bold; white-space: nowrap;">
+            <%= date.strftime("%m/%d") %> (<%= I18n.t('date.abbr_day_names')[date.wday] %>)
+          </td>
+          
+          <%# 休み %>
+          <td style="padding: 5px; text-align: left; vertical-align: top; white-space: nowrap;">
+            <% if is_closed %><div>定休</div><% end %>
+            <% (@requests_by_date[date.to_date] || []).each do |req| %>
+              <div style="color: #d32f2f;">休: <%= req.staff.name %></div>
+            <% end %>
+            <% assigned_holidays.each do |staff| %>
+              <div style="color: #e67e22;">休: <%= staff.name %></div>
+            <% end %>
+          </td>
+          
+          <%# --- 2. 15分ごとのセルを描画し、該当するスタッフを表示 --- %>
+          <% time_slots.each do |time_str| %>
+            <td style="padding: 1px; border: 1px solid #eee; background: <%= is_closed ? '#f9f9f9' : '#fff' %>; vertical-align: middle;">
+              <% if !is_closed %>
+                <% 
+                   # このセルの時間（time_str）が、シフトの勤務時間内に含まれているかチェック
+                   # (開始時間 <= 現在のセル時間) かつ (現在のセル時間 < 終了時間)
+                   active_slots = daily_slots.select { |slot| slot[:start_time] <= time_str && time_str < slot[:end_time] }
+                %>
+                
+                <%# 該当するスタッフがいれば名前を表示 %>
+                <% active_slots.each do |slot| %>
+                  <div style="background: #e8f5e9; color: #28a745; font-size: 0.7em; padding: 2px; margin-bottom: 1px; border-radius: 3px; white-space: nowrap;">
+                    <%= slot[:staff].name %>
+                  </div>
+                <% end %>
+              <% end %>
+            </td>
+          <% end %>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

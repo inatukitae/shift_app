@@ -12,13 +12,17 @@ class SimsController < ApplicationController
     # ビュー表示用とカレンダー判定用の両方を用意
     @work_settings_list = WorkSetting.order(:day_of_week)
     @work_settings_map = WorkSetting.all.index_by(&:day_of_week)
+    @settings = RequiredStaffSetting.all.group_by(&:day_of_week)
 
     @staff_assignments = {} 
+
+    # --- 修正箇所1: 希望休の取得を割り当てループの前に移動 ---
+    @shift_requests = ShiftRequest.includes(:staff).order(request_date: :asc)
+    @requests_by_date = @shift_requests.group_by(&:request_date)
     
-    # 修正: 「公休」がある週のスタッフのみ除外するハッシュを作成
+    # 「公休」がある週のスタッフのみ除外するハッシュを作成
     has_kokyu_in_week = {}
-    ShiftRequest.all.each do |req|
-      # ラベル名は適宜調整してください（'公休'）
+    @shift_requests.each do |req|
       if req.request_type_label == "公休"
         week_start = req.request_date.beginning_of_week(:sunday)
         has_kokyu_in_week[[req.staff_id, week_start]] = true
@@ -29,7 +33,6 @@ class SimsController < ApplicationController
       week_start = week.first.beginning_of_week(:sunday)
       
       # 1. すべての曜日を対象にして、定休日だけをフィルタリング
-      # 期間外（グレーアウト）も含めて、営業日ならすべて対象にする
       all_possible_dates = week.select do |d| 
         setting = @work_settings_map[d.wday]
         !(setting&.is_closed)
@@ -37,25 +40,69 @@ class SimsController < ApplicationController
       
       next if all_possible_dates.empty?
 
-      # 2. 割り当ては「カレンダーに表示されているすべての営業日」に広げる
-      # これにより、期間外のマスも割り当て対象になります
-      valid_assignment_dates = all_possible_dates
-
       # 「公休」があるスタッフのみをその週のプールから除外
       available_staffs = @staffs.reject { |s| has_kokyu_in_week[[s.id, week_start]] }
       
-      shuffled_dates = valid_assignment_dates.shuffle
+      # ランダム性を担保するためスタッフをシャッフル
       staff_pool = available_staffs.shuffle
 
-      staff_pool.each_with_index do |staff, i|
-        # まんべんなく割り当てるため、日付リストをループさせる
-        target_date = shuffled_dates[i % shuffled_dates.size]
+      # --- 修正箇所2: 休みが少ない日を優先して割り当てるロジック ---
+      staff_pool.each do |staff|
+        # a. 各営業日の現在の「休み人数（希望休 + アサイン済）」を算出
+        date_counts = all_possible_dates.map do |date|
+          req_count = @requests_by_date[date] ? @requests_by_date[date].size : 0
+          assign_count = @staff_assignments[date] ? @staff_assignments[date].size : 0
+          { date: date, count: req_count + assign_count }
+        end
+        
+        # b. 休み人数の最小値を取得（誰も休んでいない日があれば0になる）
+        min_count = date_counts.map { |dc| dc[:count] }.min
+        
+        # c. 最小値と一致する日（候補日）だけを抽出
+        candidate_dates = date_counts.select { |dc| dc[:count] == min_count }.map { |dc| dc[:date] }
+        
+        # d. 候補の中からランダムに1日を選び、割り当てを確定
+        target_date = candidate_dates.sample
+        
         @staff_assignments[target_date] ||= []
         @staff_assignments[target_date] << staff
       end
     end
+  
+    # 以下の設定データ作成処理はそのまま
+    @settings = RequiredStaffSetting.order(:start_time).group_by(&:day_of_week)
+    @increase_data = {}
+    @decrease_data = {}
+    @diff_data = {}
+    @working_hours = {}
 
-    @shift_requests = ShiftRequest.includes(:staff).order(request_date: :asc)
-    @requests_by_date = ShiftRequest.includes(:staff).order(request_date: :asc).group_by(&:request_date)
+    (0..6).each do |wday|
+      increases = RequiredStaffSetting.get_increase_points_with_ids(wday)
+      decreases = RequiredStaffSetting.get_decrease_points(wday)
+      @increase_data[wday] = increases
+      @decrease_data[wday] = decreases
+      @diff_data[wday] = {}
+      
+      daily_settings = @settings[wday] || []
+      
+      increases.each_with_index do |inc, i|
+        dec = decreases[i]
+        
+        current_required = daily_settings.select do |s| 
+          s.start_time.strftime("%H:%M") <= inc[:time] && s.end_time.strftime("%H:%M") > inc[:time]
+        end.sum(&:required_count)
+        
+        prev_count = daily_settings.select{|s| s.end_time.strftime("%H:%M") <= inc[:time]}.sum(&:required_count)
+        @diff_data[wday][inc[:time]] = current_required - prev_count
+        
+        if dec.present?
+          start_t = Time.parse(inc[:time])
+          end_t = Time.parse(dec[:time])
+          total_minutes = ((end_t - start_t) / 60).to_i
+          break_time = total_minutes >= 480 ? 60 : (total_minutes > 360 ? 45 : 0)
+          @working_hours["#{wday}_#{i}"] = total_minutes - break_time
+        end
+      end
+    end
   end
 end
