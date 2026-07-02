@@ -1,6 +1,35 @@
 class SimsController < ApplicationController
-  def index
+def index
+  @past_shifts = ShiftRule.order(date: :desc).group_by(&:date)
+
+  # batch_id が存在しない古いエラーデータを無視し、batch_idごとにグループ化する
+  @saved_periods = ShiftRule.where.not(batch_id: nil)
+                            .group_by(&:batch_id)
+                            .map do |batch_id, shifts|
+                              { 
+                                batch_id: batch_id,
+                                start: shifts.map(&:date).min, # バッチ内の最初の開始日
+                                end: shifts.map(&:date).max    # バッチ内の最後の終了日
+                              }
+                            end
+                            .sort_by { |p| p[:start] }.reverse # 日付が新しい順に並び替え
+  
+  @saved_periods ||= []
+end
+
+def show
+  @start_date = Date.parse(params[:start_date])
+  @end_date = Date.parse(params[:end_date])
+  @days = (@start_date..@end_date).to_a
+  @staffs = Staff.all
+  
+  # スタッフIDと日付をキーにしてシフト情報を取得できるハッシュを作成
+  # 例: @shift_map[[staff_id, date]] = "08:45-13:00"
+  @shift_map = {}
+  ShiftRule.where(date: @start_date..@end_date).each do |s|
+    @shift_map[[s.staff_id, s.date]] = "#{s.start_time.strftime('%H:%M')}-#{s.end_time.strftime('%H:%M')}"
   end
+end
 
   def new
     @start_date = params[:start_date].present? ? Date.parse(params[:start_date]) : Date.new(2026, 6, 11)
@@ -162,6 +191,35 @@ class SimsController < ApplicationController
       @staff_work_days[staff.id] = count
     end
 
+  end
+
+  def save_shifts
+    # 保存の目印としてユニークなIDを作成
+    batch_id = Time.now.to_i.to_s 
+
+    params[:shifts].each do |date_str, staffs|
+      date = Date.parse(date_str)
+      staffs.each do |staff_id, times|
+        shift = ShiftRule.find_or_initialize_by(date: date, staff_id: staff_id)
+        
+        # 属性を更新
+        shift.attributes = {
+          day_of_week: date.wday,
+          start_time: times[:start],
+          end_time: times[:end],
+          staff_count: 1,
+          batch_id: batch_id # ★追加：同じタイミングで保存したデータは同じIDになる
+        }
+        shift.save
+      end
+    end
+
+    redirect_to sims_path, notice: "シフトを1つのデータセットとして保存しました。"
+  end
+
+  def destroy_batch
+    ShiftRule.where(batch_id: params[:batch_id]).destroy_all
+    redirect_to sims_path, notice: "シフトセットを削除しました。"
   end
 
 

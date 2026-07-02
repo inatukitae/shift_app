@@ -2,7 +2,13 @@ Rails.application.routes.draw do
   root "pages#index"
 
   resources :staffs
-  resources :sims
+  resources :sims do
+    collection do
+      post :save_shifts
+      get "sims/show", to: "sims#show", as: :show_sims
+      delete 'destroy_batch/:batch_id', to: 'sims#destroy_batch', as: :destroy_batch_sims
+    end
+  end
   resources :shift_requests
   resources :work_settings
 

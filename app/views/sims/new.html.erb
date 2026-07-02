@@ -180,12 +180,6 @@
       <% end %>
     </tbody>
   </table>
-
-  <div style="margin-top: 20px;">
-    <%= f.hidden_field :start_date, value: @start_date %>
-    <%= f.hidden_field :end_date, value: @end_date %>
-    <%= f.submit "シフトを確定する", style: "padding: 12px 25px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;" %>
-  </div>
 <% end %>
 
 
@@ -500,13 +494,18 @@
 
 <h3>出勤時間調整</h3>
 <%
-  # --- 1. スタッフごとの過不足時間の初期状態を計算（分単位） ---
+  # --- ① ここで1回だけ初期化する（ループの外に配置することが重要） ---
   staff_diff_minutes = {}
+  @adjusted_staff_minutes = {} # 調整後の時間を保存
+
   @staffs.each do |staff|
     work_days = @staff_work_days[staff.id] || 0
     total_minutes = @staff_total_working_minutes[staff.id] || 0
     expected = work_days * 8 * 60
     staff_diff_minutes[staff.id] = expected - total_minutes
+    
+    # 初期値として現在の実勤務時間をセット
+    @adjusted_staff_minutes[staff.id] = total_minutes 
   end
 %>
 
@@ -532,7 +531,7 @@
           decreases = @decrease_data[date.wday] || []
           num_of_slots = [increases.length, decreases.length].max
           
-          # --- 2. その日の基本のシフト枠を構築 ---
+          # --- その日の基本のシフト枠を構築 ---
           daily_slots = []
           if !is_closed && num_of_slots > 0
             previous_wday_counts = (0...date.wday).sum { |w| [(@increase_data[w]||[]).length, (@decrease_data[w]||[]).length].max }
@@ -561,14 +560,13 @@
             end
           end
           
-          # ▼ その日の調整結果を保存する配列
           daily_adjustments = []
 
-          # --- 3. 出勤時間の調整（追加・削除）ロジック ---
+          # --- 出勤時間の調整ロジック ---
           if daily_slots.any?
             setting = @work_settings_map[date.wday]
 
-            # 【事前準備】この日に「隙間シフト（120分以上）」が発生しているか判定（表示用）
+            # 【事前準備】隙間シフトの判定
             has_gap_shift = false
             if setting && setting.close_time
               close_mins = setting.close_time.hour * 60 + setting.close_time.min
@@ -578,14 +576,19 @@
               has_gap_shift = true if gap_diff >= 120
             end
 
-            # -----------------------------------------------------
-            # 【削除処理】過剰な場合（変更なし）
-            # -----------------------------------------------------
-            # （※既存の削除ロジックはそのまま残してください）
-            # ... 省略 ...
+
+            @final_shifts ||= {}
+            daily_slots.each do |slot|
+              if slot[:staff]
+                @final_shifts[[date, slot[:staff].id]] = { start_time: slot[:start_time], end_time: slot[:end_time] }
+              end
+            end
+
+            # （※もし「削除（短縮）処理」のロジックが手元にある場合は、この辺りに配置し、
+            # 同様に @adjusted_staff_minutes[staff.id] -= 減らした時間 を追加してください）
 
             # -----------------------------------------------------
-            # 【追加処理】不足な場合（修正版）
+            # 【追加処理】不足な場合
             # -----------------------------------------------------
             first_slot = daily_slots[0]
             f_staff = first_slot[:staff]
@@ -599,10 +602,8 @@
                 en_time = Time.parse(first_slot[:end_time])
                 close_time_obj = Time.parse(close_str)
                 
-                # 閉店時間まであと何分伸ばせるか
                 max_extend_mins = ((close_time_obj - en_time) / 60).to_i
                 
-                # 15分以上不足している場合に延長する（細かすぎる調整を抑制）
                 if max_extend_mins > 0 && lack_mins >= 15
                   add_mins = [max_extend_mins, lack_mins].min
                   
@@ -624,7 +625,12 @@
                   
                   if actual_add > 0
                     first_slot[:end_time] = new_en_time.strftime("%H:%M")
+                    
+                    # --- ② 実際に時間が追加されたタイミングでハッシュに加算 ---
                     staff_diff_minutes[f_staff.id] -= actual_add
+                    @adjusted_staff_minutes[f_staff.id] += actual_add 
+                    # -----------------------------------------------------
+                    
                     daily_adjustments << "<span style='color: #28a745;'>#{f_staff.name}: +#{actual_add / 60}時間#{actual_add % 60}分</span>"
                   end
                 end
@@ -677,3 +683,84 @@
     </tbody>
   </table>
 </div>
+
+<h3>出勤時間最終確認</h3>
+<table border="1" style="border-collapse: collapse; width: 100%; text-align: center;">
+  <thead>
+    <tr style="background: #f2f2f2;">
+      <th>名前</th>
+      <th>出勤日数</th>
+      <th>想定勤務時間</th>
+      <th>実勤務時間（調整後）</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @staffs.each do |staff| %>
+      <tr>
+        <td style="text-align: left; padding: 10px;"><%= staff.name %></td>
+        <td><%= @staff_work_days[staff.id] || 0 %>日</td>
+        <td>
+          <% work_days = @staff_work_days[staff.id] || 0 %>
+          <%= work_days * 8 %>時間
+        </td>
+        
+        <%# --- ③ ループ外で蓄積された結果をここで呼び出し --- %>
+        <td>
+          <% adj_total = @adjusted_staff_minutes[staff.id] || 0 %>
+          <%= "#{adj_total / 60}時間#{adj_total % 60}分" %>
+        </td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+
+
+<%
+  # 安全な初期化
+  @final_shifts ||= {}
+%>
+<%= form_with url: save_shifts_sims_path, local: true do |f| %>
+  <%= f.hidden_field :start_date, value: @start_date %>
+  <%= f.hidden_field :end_date, value: @end_date %>
+  <h3>シフト表</h3>
+  <div style="overflow-x: auto;">
+    <table border="1" style="border-collapse: collapse; width: 100%; text-align: center;">
+      <thead>
+        <tr style="background: #f2f2f2;">
+          <th style="padding: 10px;">名前</th>
+          <% @calendar_days.each do |date| %>
+            <% next unless date >= @start_date && date <= @end_date %>
+            <th style="padding: 5px; font-size: 0.8em;"><%= date.strftime("%m/%d") %></th>
+          <% end %>
+        </tr>
+      </thead>
+      <tbody>
+        <% @staffs.each do |staff| %>
+          <tr>
+            <td style="text-align: left; padding: 10px;"><%= staff.name %></td>
+            <% @calendar_days.each do |date| %>
+              <% next unless date >= @start_date && date <= @end_date %>
+              <td style="padding: 5px; font-size: 0.7em;">
+                <% shift = @final_shifts&.fetch([date, staff.id], nil) %>
+                <% if shift %>
+                  <%= "#{shift[:start_time]}-#{shift[:end_time]}" %>
+                  
+                  <%# 【ここが重要】保存用データを隠しフィールドとして追加 %>
+                  <%= f.hidden_field "shifts[#{date}][#{staff.id}][start]", value: shift[:start_time] %>
+                  <%= f.hidden_field "shifts[#{date}][#{staff.id}][end]", value: shift[:end_time] %>
+                <% else %>
+                  -
+                <% end %>
+              </td>
+            <% end %>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top: 20px; text-align: center;">
+    <%= f.submit "このシフトを確定・保存する", class: "btn-save" %>
+  </div>
+<% end %>

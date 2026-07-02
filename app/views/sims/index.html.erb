@@ -13,5 +13,46 @@
 <% end %>
 
 <hr>
-<h2>過去のシフト</h2>
-<!-- 過去のリスト表示 -->
+
+
+<h3>過去のシフト一覧</h3>
+<table border="1">
+  <thead>
+    <tr>
+      <th>期間</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+  <% if @saved_periods.present? %>
+    <% @saved_periods.each do |period| %>
+      <tr>
+        <td>
+          <% if period[:start].present? && period[:end].present? %>
+            <%= period[:start].strftime("%Y/%m/%d") %> ～ <%= period[:end].strftime("%Y/%m/%d") %>
+          <% else %>
+            期間情報が不完全です
+          <% end %>
+        </td>
+        <td>
+          <%# batch_id がある場合のみリンクとボタンを表示する %>
+          <% if period[:batch_id].present? %>
+            <%= link_to "詳細を表示", show_sims_sims_path(start_date: period[:start], end_date: period[:end]), style: "display: inline-block; margin-right: 15px;" %>
+            
+            <%= button_to "削除", destroy_batch_sims_sims_path(batch_id: period[:batch_id]), 
+              method: :delete, 
+              data: { confirm: "本当にこの期間のシフトセットを削除しますか？" },
+              style: "color: red; cursor: pointer; display: inline-block; background: none; border: none; text-decoration: underline; padding: 0;" %>
+          <% else %>
+            <span style="color: #999;">(データ不整合のため操作不可)</span>
+          <% end %>
+        </td>
+      </tr>
+    <% end %>
+  <% else %>
+    <tr>
+      <td colspan="2">過去のシフトデータはありません。</td>
+    </tr>
+  <% end %>
+  </tbody>
+</table>

@@ -1,4 +1,6 @@
 class ShiftRule < ApplicationRecord
+
+  belongs_to :staff
   # 曜日（0:日, 1:月...）, 開始時間, 終了時間, 人数が必須
   validates :day_of_week, presence: true
   validates :start_time, presence: true

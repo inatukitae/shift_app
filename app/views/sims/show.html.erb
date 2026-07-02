@@ -1,0 +1,40 @@
+<h2>シフト期間: <%= @start_date.strftime("%Y年%m月%d日") %> ～ <%= @end_date.strftime("%Y年%m月%d日") %></h2>
+
+<div style="overflow-x: auto;">
+  <table border="1" style="border-collapse: collapse; width: 100%; text-align: center; font-size: 0.8em;">
+    <thead>
+      <tr style="background-color: #f2f2f2;">
+        <th style="padding: 8px;">名前</th>
+        <% @days.each do |date| %>
+          <th style="padding: 8px;"><%= date.strftime("%m/%d") %></th>
+        <% end %>
+      </tr>
+    </thead>
+    <tbody>
+      <% @staffs.each do |staff| %>
+        <tr>
+          <td style="padding: 8px; font-weight: bold;"><%= staff.name %></td>
+          <% @days.each do |date| %>
+            <td style="padding: 8px; white-space: nowrap;">
+            <% shift = @shift_map[[staff.id, date]] %>
+            <% if shift %>
+                <%
+                start_str, end_str = shift.split('-')
+                def to_decimal(time_str)
+                    h, m = time_str.split(':').map(&:to_f)
+                    (h + (m / 60.0)).round(2)
+                end
+                %>
+                <%= "#{to_decimal(start_str)}-#{to_decimal(end_str)}" %>
+            <% else %>
+                -
+            <% end %>
+            </td>
+          <% end %>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
+
+<%= link_to "一覧に戻る", sims_path %>
