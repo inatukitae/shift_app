@@ -104,5 +104,66 @@ class SimsController < ApplicationController
         end
       end
     end
+
+    @staff_work_days = {}
+    @staff_total_working_minutes = Hash.new(0) # 各スタッフの合計勤務時間（分）を保持するハッシュ
+    
+    # ループ内で使うための「定休日ではない有効な営業日」のリスト
+    active_dates = @calendar_days.select { |d| d >= @start_date && d <= @end_date && !(@work_settings_map[d.wday]&.is_closed) }
+
+    # 1. 各日のシフト枠割り当てを再現し、該当する枠の勤務時間を集計
+    (@start_date..@end_date).each do |date|
+      # 定休日はスキップ
+      next if @work_settings_map[date.wday]&.is_closed
+      
+      assigned_holidays = @staff_assignments[date.to_date] || []
+      increases = @increase_data[date.wday] || []
+      decreases = @decrease_data[date.wday] || []
+      num_of_slots = [increases.length, decreases.length].max
+      
+      # 出勤可能なスタッフを取得（休みを除外）
+      available = @staffs.reject { |s| assigned_holidays.include?(s) || (@requests_by_date[date.to_date] || []).map(&:staff_id).include?(s.id) }
+      next if available.empty?
+      
+      current_index = active_dates.index(date) || 0
+      rotated = available.rotate(current_index)
+      
+      (0...num_of_slots).each do |i|
+        # シフト枠確認と全く同じ条件でスタッフを特定
+        staff = if available.size == 1
+                  (i == 1) ? rotated[0] : nil
+                else
+                  rotated[i]
+                end
+        
+        if staff
+          # 曜日(wday)と枠インデックス(i)をキーにして、設定された勤務時間(分)を加算
+          pair_key = "#{date.wday}_#{i}"
+          @staff_total_working_minutes[staff.id] += @working_hours[pair_key] || 0
+        end
+      end
+    end
+
+    # 2. 出勤日数のカウント（既存のロジックのまま）
+    @staffs.each do |staff|
+      count = 0
+      
+      (@start_date..@end_date).each do |date|
+        next if @work_settings_map[date.wday]&.is_closed
+        is_requested_off = (@requests_by_date[date.to_date] || []).any? { |r| r.staff_id == staff.id }
+        next if is_requested_off
+        assigned_holidays = @staff_assignments[date.to_date] || []
+        is_assigned_holiday = assigned_holidays.include?(staff)
+        next if is_assigned_holiday
+
+        count += 1
+      end
+      
+      @staff_work_days[staff.id] = count
+    end
+
   end
+
+
+  
 end

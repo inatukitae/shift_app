@@ -64,6 +64,7 @@
     <th>シフト枠</th>
     <th>必要人数差分</th>
     <th>勤務時間</th>
+    <th>隙間シフト</th>
   </tr>
   <% 
     row_number = 1 # 2. カウンターを初期化
@@ -92,6 +93,33 @@
             <% total = @working_hours[pair_key] %>
             <%= "#{total / 60}時間#{total % 60}分" %>
           <% end %>
+        </td>
+        <td style="text-align: center;">
+          <% 
+            setting = @work_settings_map[wday]
+            close_str = setting&.close_time&.strftime("%H:%M")
+            
+            if close_str && dec && dec[:time].present?
+              # "HH:MM" を 時 と 分 に分解
+              c_h, c_m = close_str.split(':').map(&:to_i)
+              d_h, d_m = dec[:time].split(':').map(&:to_i)
+              
+              # すべて分単位の整数に変換して差分を計算
+              close_total_minutes = c_h * 60 + c_m
+              dec_total_minutes = d_h * 60 + d_m
+              #　30分の調整をする
+              diff_minutes = close_total_minutes - dec_total_minutes -30
+              
+              # 2時間（120分）以上の場合のみ表示
+              if diff_minutes >= 120
+                hours = diff_minutes / 60
+                minutes = diff_minutes % 60
+          %>
+                <%= "#{hours}時間#{minutes}分" %>
+          <% 
+              end
+            end 
+          %>
         </td>
       </tr>
       <% row_number += 1 %> <%# 4. カウンターをインクリメント %>
@@ -388,6 +416,254 @@
                 %>
                 
                 <%# 該当するスタッフがいれば名前を表示 %>
+                <% active_slots.each do |slot| %>
+                  <div style="background: #e8f5e9; color: #28a745; font-size: 0.7em; padding: 2px; margin-bottom: 1px; border-radius: 3px; white-space: nowrap;">
+                    <%= slot[:staff].name %>
+                  </div>
+                <% end %>
+              <% end %>
+            </td>
+          <% end %>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
+
+<h3>出勤状況確認</h3>
+<table border="1" style="border-collapse: collapse; width: 100%; text-align: center;">
+  <thead>
+    <tr style="background: #f2f2f2;">
+      <th>名前</th>
+      <th>出勤日数</th>
+      <th>想定勤務時間</th>
+      <th>実勤務時間</th>
+      <th>勤務時間過不足</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @staffs.each do |staff| %>
+      <tr>
+        <td style="text-align: left; padding: 10px;">
+          <div style="...">
+            <%= staff.name %>
+          </div>
+        </td>
+        
+        <td><%= @staff_work_days[staff.id] || 0 %>日</td>
+
+        <td>
+          <% work_days = @staff_work_days[staff.id] || 0 %>
+          <%= work_days * 8 %>時間
+        </td>
+        
+        <% # ▼▼▼ 勤務時間の表示箇所を以下のように修正します ▼▼▼ %>
+        <td>
+          <% total_minutes = @staff_total_working_minutes[staff.id] || 0 %>
+          <% if total_minutes > 0 %>
+            <%= "#{total_minutes / 60}時間#{total_minutes % 60}分" %>
+          <% else %>
+            0時間0分
+          <% end %>
+        </td>
+        <td>
+          <% 
+            work_days = @staff_work_days[staff.id] || 0
+            total_minutes = @staff_total_working_minutes[staff.id] || 0
+            
+            # 想定勤務時間を分数に変換 (日数 × 8時間 × 60分)
+            expected_minutes = work_days * 8 * 60
+            
+            # 想定勤務時間 - 実勤務時間
+            diff_minutes = expected_minutes - total_minutes
+            
+            # 表示用に時間と分に分解
+            abs_diff = diff_minutes.abs
+            hours = abs_diff / 60
+            minutes = abs_diff % 60
+          %>
+          <% if diff_minutes > 0 %>
+            <%# 実勤務時間が少なく、時間が足りていない場合（不足分を正の数で表示） %>
+            <%= "#{hours}時間#{minutes}分" %>
+          <% elsif diff_minutes < 0 %>
+            <%# 実勤務時間の方が多く、想定を超過している場合（マイナス表記） %>
+            <%= "-#{hours}時間#{minutes}分" %>
+          <% else %>
+            0時間0分
+          <% end %>
+        </td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+
+<h3>出勤時間調整</h3>
+<%
+  # --- 1. スタッフごとの過不足時間の初期状態を計算（分単位） ---
+  staff_diff_minutes = {}
+  @staffs.each do |staff|
+    work_days = @staff_work_days[staff.id] || 0
+    total_minutes = @staff_total_working_minutes[staff.id] || 0
+    expected = work_days * 8 * 60
+    staff_diff_minutes[staff.id] = expected - total_minutes
+  end
+%>
+
+<div style="overflow-x: auto; margin-bottom: 50px;">
+  <table border="1" style="border-collapse: collapse; width: 100%; font-size: 0.75em; text-align: center;">
+    <thead>
+      <tr style="background: #f2f2f2;">
+        <th style="padding: 10px; min-width: 60px;">日付</th>
+        <th style="padding: 10px; min-width: 60px;">休み</th>
+        <th style="padding: 10px; min-width: 100px;">調整内容</th>
+        <% time_slots.each do |time_str| %>
+          <th style="padding: 2px; font-size: 0.7em; min-width: 35px;"><%= time_str %></th>
+        <% end %>
+      </tr>
+    </thead>
+    <tbody>
+      <% @calendar_days.each do |date| %>
+        <% next unless date >= @start_date && date <= @end_date %>
+        <% 
+          is_closed = @work_settings_map[date.wday]&.is_closed
+          assigned_holidays = @staff_assignments[date.to_date] || []
+          increases = @increase_data[date.wday] || []
+          decreases = @decrease_data[date.wday] || []
+          num_of_slots = [increases.length, decreases.length].max
+          
+          # --- 2. その日の基本のシフト枠を構築 ---
+          daily_slots = []
+          if !is_closed && num_of_slots > 0
+            previous_wday_counts = (0...date.wday).sum { |w| [(@increase_data[w]||[]).length, (@decrease_data[w]||[]).length].max }
+            available = @staffs.reject { |s| assigned_holidays.include?(s) || (@requests_by_date[date.to_date] || []).map(&:staff_id).include?(s.id) }
+            
+            active_dates = @calendar_days.select { |d| d >= @start_date && d <= @end_date && !(@work_settings_map[d.wday]&.is_closed) }
+            current_index = active_dates.index(date) || 0
+            rotated = available.rotate(current_index)
+            
+            (0...num_of_slots).each do |i|
+              staff = if available.size == 1
+                        (i == 1) ? rotated[0] : nil
+                      else
+                        rotated[i]
+                      end
+              
+              if staff
+                start_time = increases[i] ? increases[i][:time] : nil
+                end_time = decreases[i] ? decreases[i][:time] : nil
+                display_no = previous_wday_counts + i + 1
+                
+                if start_time && end_time
+                  daily_slots << { no: display_no, staff: staff, start_time: start_time, end_time: end_time }
+                end
+              end
+            end
+          end
+          
+          # ▼ その日の調整結果を保存する配列
+          daily_adjustments = []
+
+          # --- 3. 出勤時間の調整（追加・削除）ロジック ---
+          if daily_slots.any?
+            setting = @work_settings_map[date.wday]
+
+            # 【事前準備】この日に「隙間シフト（120分以上）」が発生しているか判定（表示用）
+            has_gap_shift = false
+            if setting && setting.close_time
+              close_mins = setting.close_time.hour * 60 + setting.close_time.min
+              l_h, l_m = daily_slots.last[:end_time].split(':').map(&:to_i)
+              last_end_mins = l_h * 60 + l_m
+              gap_diff = close_mins - last_end_mins - 30
+              has_gap_shift = true if gap_diff >= 120
+            end
+
+            # -----------------------------------------------------
+            # 【削除処理】過剰な場合（変更なし）
+            # -----------------------------------------------------
+            # （※既存の削除ロジックはそのまま残してください）
+            # ... 省略 ...
+
+            # -----------------------------------------------------
+            # 【追加処理】不足な場合（修正版）
+            # -----------------------------------------------------
+            first_slot = daily_slots[0]
+            f_staff = first_slot[:staff]
+            
+            if f_staff && staff_diff_minutes[f_staff.id] > 0
+              lack_mins = staff_diff_minutes[f_staff.id]
+              close_str = setting&.close_time&.strftime("%H:%M")
+              
+              if close_str
+                st_time = Time.parse(first_slot[:start_time])
+                en_time = Time.parse(first_slot[:end_time])
+                close_time_obj = Time.parse(close_str)
+                
+                # 閉店時間まであと何分伸ばせるか
+                max_extend_mins = ((close_time_obj - en_time) / 60).to_i
+                
+                # 15分以上不足している場合に延長する（細かすぎる調整を抑制）
+                if max_extend_mins > 0 && lack_mins >= 15
+                  add_mins = [max_extend_mins, lack_mins].min
+                  
+                  original_total = ((en_time - st_time) / 60).to_i
+                  original_break = original_total >= 480 ? 60 : (original_total > 360 ? 45 : 0)
+                  original_work = original_total - original_break
+                  
+                  new_work = original_work + add_mins
+                  new_break = new_work >= 480 ? 60 : (new_work > 360 ? 45 : 0)
+                  new_total = new_work + new_break
+                  
+                  new_en_time = st_time + (new_total * 60)
+                  new_en_time = close_time_obj if new_en_time > close_time_obj
+                  
+                  actual_total = ((new_en_time - st_time) / 60).to_i
+                  actual_break = actual_total >= 480 ? 60 : (actual_total > 360 ? 45 : 0)
+                  actual_work = actual_total - actual_break
+                  actual_add = actual_work - original_work
+                  
+                  if actual_add > 0
+                    first_slot[:end_time] = new_en_time.strftime("%H:%M")
+                    staff_diff_minutes[f_staff.id] -= actual_add
+                    daily_adjustments << "<span style='color: #28a745;'>#{f_staff.name}: +#{actual_add / 60}時間#{actual_add % 60}分</span>"
+                  end
+                end
+              end
+            end
+          end
+        %>
+        
+        <tr>
+          <%# 日付 %>
+          <td style="padding: 5px; font-weight: bold; white-space: nowrap;">
+            <%= date.strftime("%m/%d") %> (<%= I18n.t('date.abbr_day_names')[date.wday] %>)
+          </td>
+          
+          <%# 休み %>
+          <td style="padding: 5px; text-align: left; vertical-align: top; white-space: nowrap;">
+            <% if is_closed %><div>定休</div><% end %>
+            <% (@requests_by_date[date.to_date] || []).each do |req| %>
+              <div style="color: #d32f2f;">休: <%= req.staff.name %></div>
+            <% end %>
+            <% assigned_holidays.each do |staff| %>
+              <div style="color: #e67e22;">休: <%= staff.name %></div>
+            <% end %>
+          </td>
+          
+          <%# 調整内容 %>
+          <td style="padding: 5px; text-align: left; vertical-align: middle; white-space: nowrap; font-weight: bold;">
+            <% if daily_adjustments.any? %>
+              <%= daily_adjustments.join("<br>").html_safe %>
+            <% else %>
+              <span style="color: #ccc;">-</span>
+            <% end %>
+          </td>
+
+          <%# 調整後の15分ごとのセルを描画 %>
+          <% time_slots.each do |time_str| %>
+            <td style="padding: 1px; border: 1px solid #eee; background: <%= is_closed ? '#f9f9f9' : '#fff' %>; vertical-align: middle;">
+              <% if !is_closed %>
+                <% active_slots = daily_slots.select { |slot| slot[:start_time] <= time_str && time_str < slot[:end_time] } %>
                 <% active_slots.each do |slot| %>
                   <div style="background: #e8f5e9; color: #28a745; font-size: 0.7em; padding: 2px; margin-bottom: 1px; border-radius: 3px; white-space: nowrap;">
                     <%= slot[:staff].name %>
