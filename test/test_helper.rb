@@ -2,6 +2,8 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 
+ActionController::Base.asset_host = "http://localhost:3000" if ENV["CI"]
+
 module ActiveSupport
   class TestCase
     # Run tests in parallel with specified workers
