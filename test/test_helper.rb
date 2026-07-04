@@ -7,6 +7,10 @@ module ActiveSupport
     # Run tests in parallel with specified workers
     parallelize(workers: :number_of_processors)
 
+    setup do
+      I18n.locale = :ja
+    end
+
     include Devise::Test::IntegrationHelpers # これを追加
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all
