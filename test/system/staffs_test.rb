@@ -21,7 +21,7 @@ class StaffsTest < ApplicationSystemTestCase
 
     fill_in "名前", with: "新しいスタッフ名"
     # job_typeのセレクトボックスや入力欄に合わせて調整してください
-    click_on "登録する" # または "保存する" など、フォームのボタン名に合わせる
+    click_on "保存する" # または "保存する" など、フォームのボタン名に合わせる
 
     assert_text "スタッフが登録されました"
   end
