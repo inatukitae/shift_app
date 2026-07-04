@@ -60,7 +60,7 @@ jobs:
         with:
           chrome-version: stable
 
-      # 2. 必要なシステムパッケージをインストール（google-chrome-stableの個別追加は不要になりました）
+      # 2. 必要なシステムパッケージをインストール
       - name: Install packages
         run: |
           sudo apt-get update && sudo apt-get install --no-install-recommends -y \
@@ -82,6 +82,7 @@ jobs:
         env:
           RAILS_ENV: test
           DATABASE_URL: postgres://postgres:postgres@localhost:5432
+          LANG: ja_JP.UTF-8  # 👈 ここにロケール設定を追加しました
         run: bin/rails db:test:prepare test test:system
 
       - name: Keep screenshots from failed system tests
