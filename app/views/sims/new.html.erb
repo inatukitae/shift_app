@@ -1,6 +1,10 @@
 <h2>シフト作成画面</h2>
 <p>対象期間: <%= @start_date.strftime("%Y年%m月%d日") %> から <%= @end_date.strftime("%Y年%m月%d日") %> まで</p>
 
+<div style="margin-top: 20px; text-align: center;">
+  <%= link_to "戻る", sims_path, style: "color: #ffffff; text-decoration: none; padding: 10px 25px; border: none; border-radius: 5px; background: #0056b3; font-weight: bold; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" %>
+</div>
+
 <h3>スタッフ一覧</h3>
 <div style="margin-bottom: 20px; padding: 15px; background: #f9f9f9; border-radius: 8px; border: 1px solid #ddd;">
   <div style="margin-bottom: 10px;">
@@ -510,7 +514,8 @@
                           first_slot[:end_time] = new_en_time.strftime("%H:%M")
                           staff_diff_minutes[f_staff.id] -= actual_add
                           adjusted_staff_minutes[f_staff.id] += actual_add 
-                          daily_adjustments << "<span style='color: #28a745;'>#{f_staff.name}: +#{actual_add / 60}時間#{actual_add % 60}分</span>"
+                          # === ここを修正 ===
+                          daily_adjustments << "#{f_staff.name}: +#{actual_add / 60}時間#{actual_add % 60}分"
                         end
                       end
                     end
