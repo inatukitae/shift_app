@@ -60,11 +60,12 @@ jobs:
         with:
           chrome-version: stable
 
-      # 2. 必要なシステムパッケージをインストール
+      # 2. 必要なシステムパッケージと日本語フォントをインストール
       - name: Install packages
         run: |
           sudo apt-get update && sudo apt-get install --no-install-recommends -y \
-            curl libjemalloc2 libvips postgresql-client
+            curl libjemalloc2 libvips postgresql-client \
+            fonts-noto-cjk  # 👈 ここに文字化け防止の日本語フォントを追加しました
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -82,7 +83,7 @@ jobs:
         env:
           RAILS_ENV: test
           DATABASE_URL: postgres://postgres:postgres@localhost:5432
-          LANG: ja_JP.UTF-8  # 👈 ここにロケール設定を追加しました
+          LANG: ja_JP.UTF-8
         run: bin/rails db:test:prepare test test:system
 
       - name: Keep screenshots from failed system tests

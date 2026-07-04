@@ -6,6 +6,8 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driver_options.add_argument('--no-sandbox')
     driver_options.add_argument('--disable-dev-shm-usage')
     driver_options.add_argument('--headless=new')
+    driver_options.add_argument('--lang=ja')
+    driver_options.add_preference('intl.accept_languages', 'ja')
   end
 
   setup do
