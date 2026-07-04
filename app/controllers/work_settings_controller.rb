@@ -2,7 +2,7 @@ class WorkSettingsController < ApplicationController
   before_action :authenticate_user! # 💡 必ず最初にログインを要求
 
   # 画面表示前に必ず初期データ（7日分）の存在を確認する
-  before_action :ensure_default_settings, only: [:index]
+  before_action :ensure_default_settings, only: [ :index ]
 
   def index
     # ❌ 修正前: @work_settings = WorkSetting.all.order(:day_of_week)
@@ -19,7 +19,7 @@ class WorkSettingsController < ApplicationController
     # ⭕ 修正後: 自分の設定のみを特定して更新
     @work_setting = current_user.work_settings.find(params[:id])
     if @work_setting.update(work_setting_params)
-      redirect_to work_settings_path, notice: '勤務時間を更新しました'
+      redirect_to work_settings_path, notice: "勤務時間を更新しました"
     else
       render :edit, status: :unprocessable_entity # 💡 Rails 7以降でエラー表示を安定させるために status を追加
     end

@@ -8,7 +8,7 @@ Rails.application.routes.draw do
     collection do
       post :save_shifts
       get "sims/show", to: "sims#show", as: :show_sims
-      delete 'destroy_batch/:batch_id', to: 'sims#destroy_batch', as: :destroy_batch_sims
+      delete "destroy_batch/:batch_id", to: "sims#destroy_batch", as: :destroy_batch_sims
     end
   end
   resources :shift_requests
@@ -16,14 +16,14 @@ Rails.application.routes.draw do
 
   resources :required_staff_settings do
     collection do
-      post :generate_all 
+      post :generate_all
       post :create_rule
     end
   end
 
-  resources :shift_rules, only: [:destroy]
+  resources :shift_rules, only: [ :destroy ]
 
-  
+
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.

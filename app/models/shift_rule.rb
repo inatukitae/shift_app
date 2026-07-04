@@ -1,5 +1,4 @@
 class ShiftRule < ApplicationRecord
-
   belongs_to :staff
   # 曜日（0:日, 1:月...）, 開始時間, 終了時間, 人数が必須
   validates :day_of_week, presence: true
@@ -13,7 +12,7 @@ class ShiftRule < ApplicationRecord
 
     # 開始時間と終了時間をすべて集めて、重複を除き、時系列順に並べる
     points = (settings.pluck(:start_time) + settings.pluck(:end_time)).uniq.sort
-    
+
     # 変化点のみを抽出
     change_points = []
     points.each do |time|

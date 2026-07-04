@@ -5,9 +5,9 @@ class RequiredStaffSetting < ApplicationRecord
   def self.to_base_time(time_val)
     time = if time_val.is_a?(String)
              Time.zone.parse("2000-01-01 #{time_val}")
-           else
+    else
              time_val
-           end
+    end
     time.change(year: 2000, month: 1, day: 1)
   end
 
@@ -33,21 +33,21 @@ class RequiredStaffSetting < ApplicationRecord
     return [] if settings.empty?
 
     results = []
-    
+
     settings.each do |s|
       s_start = to_base_time(s.start_time)
       prev_time = s_start - 1.minute
-      prev_setting = settings.find do |p| 
-        to_base_time(p.start_time) <= prev_time && to_base_time(p.end_time) > prev_time 
+      prev_setting = settings.find do |p|
+        to_base_time(p.start_time) <= prev_time && to_base_time(p.end_time) > prev_time
       end
-      
+
       prev_count = prev_setting&.required_count || 0
-      
+
       if s.required_count > prev_count
         results << { id: s.id, time: s_start.strftime("%H:%M") }
       end
     end
-    
+
     results
   end
 
@@ -56,15 +56,15 @@ class RequiredStaffSetting < ApplicationRecord
     # ⭕ ログインユーザーに紐づく設定だけを対象にする
     settings = user.required_staff_settings.where(day_of_week: wday).order(:end_time).to_a
     return [] if settings.empty?
-    
+
     settings.map do |s|
       s_end = to_base_time(s.end_time)
       next_time = s_end + 1.minute
-      
-      next_count = settings.find do |n| 
-        to_base_time(n.start_time) <= next_time && to_base_time(n.end_time) > next_time 
+
+      next_count = settings.find do |n|
+        to_base_time(n.start_time) <= next_time && to_base_time(n.end_time) > next_time
       end&.required_count || 0
-      
+
       next_count < s.required_count ? { time: s_end.strftime("%H:%M") } : nil
     end.compact
   end
@@ -76,7 +76,7 @@ class RequiredStaffSetting < ApplicationRecord
     current_start = to_base_time(start_time_str)
     current_setting = settings.find { |s| to_base_time(s.start_time) == current_start }
     return 0 unless current_setting
-    
+
     prev_time = current_start - 1.minute
     prev_count = settings.find { |s| to_base_time(s.start_time) <= prev_time && to_base_time(s.end_time) > prev_time }&.required_count || 0
     current_setting.required_count - prev_count

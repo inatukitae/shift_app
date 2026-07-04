@@ -22,9 +22,9 @@ class ShiftRequestsController < ApplicationController
     # ⭕ 修正後: 自分の管理下のスタッフの希望休だけを特定して更新
     staff_ids = current_user.staffs.pluck(:id)
     @shift_request = ShiftRequest.where(staff_id: staff_ids).find(params[:id])
-    
+
     if @shift_request.update(shift_request_params)
-      redirect_to shift_requests_path, notice: '更新しました'
+      redirect_to shift_requests_path, notice: "更新しました"
     else
       render :edit, status: :unprocessable_entity
     end
@@ -34,14 +34,14 @@ class ShiftRequestsController < ApplicationController
     # 💡 データの安全性のために、paramsで送られてきた staff_id が
     # 本当にこの管理者の登録したスタッフかどうかを検証して作成します
     @shift_request = ShiftRequest.new(shift_request_params)
-    
+
     # 送られてきたスタッフが自分の管理下でない場合はエラーにするガード
     unless current_user.staffs.exists?(id: @shift_request.staff_id)
-      redirect_to shift_requests_path, alert: '不正なスタッフが選択されました' and return
+      redirect_to shift_requests_path, alert: "不正なスタッフが選択されました" and return
     end
 
     if @shift_request.save
-      redirect_to shift_requests_path, notice: '希望休を申請しました。'
+      redirect_to shift_requests_path, notice: "希望休を申請しました。"
     else
       render :new, status: :unprocessable_entity
     end
@@ -52,7 +52,7 @@ class ShiftRequestsController < ApplicationController
     staff_ids = current_user.staffs.pluck(:id)
     @shift_request = ShiftRequest.where(staff_id: staff_ids).find(params[:id])
     @shift_request.destroy
-    redirect_to shift_requests_path, notice: '申請を取り消しました。'
+    redirect_to shift_requests_path, notice: "申請を取り消しました。"
   end
 
   private # 💡 private の位置を一番下に正しく修正（元コードはメソッドの下にありました）

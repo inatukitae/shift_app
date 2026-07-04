@@ -531,7 +531,13 @@
                   <% assigned_holidays.each do |s| %><div>公休: <%= s.name %></div><% end %>
                 </td>
                 <td style="padding: 5px; text-align: left; font-weight: bold;">
-                  <%= daily_adjustments.any? ? daily_adjustments.join("<br>").html_safe : "<span style='color: #ccc;'>-</span>".html_safe %>
+                  <% if daily_adjustments.any? %>
+                    <% daily_adjustments.each do |adj| %>
+                      <div style="color: #28a745;"><%= adj %></div>
+                    <% end %>
+                  <% else %>
+                    <span style="color: #ccc;">-</span>
+                  <% end %>
                 </td>
                 <% time_slots.each do |time_str| %>
                   <td style="padding: 1px; border: 1px solid #eee; background: <%= is_closed ? '#f9f9f9' : '#fff' %>;">
