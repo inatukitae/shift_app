@@ -1,8 +1,12 @@
 require "test_helper"
 
 class StaffsControllerTest < ActionDispatch::IntegrationTest
+  include Devise::Test::IntegrationHelpers # Deviseのテストヘルパーを有効化
+
   setup do
     @staff = staffs(:one)
+    @user = users(:one) # フィクスチャからログイン用のユーザーを取得
+    sign_in @user        # 各テストの前にログインさせる
   end
 
   test "should get index" do
@@ -17,7 +21,7 @@ class StaffsControllerTest < ActionDispatch::IntegrationTest
 
   test "should create staff" do
     assert_difference("Staff.count") do
-      post staffs_url, params: { staff: { name: @staff.name } }
+      post staffs_url, params: { staff: { name: @staff.name, job_type: @staff.job_type } }
     end
 
     assert_redirected_to staff_url(Staff.last)
