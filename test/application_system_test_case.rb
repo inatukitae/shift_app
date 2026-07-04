@@ -7,4 +7,8 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driver_options.add_argument('--disable-dev-shm-usage')
     driver_options.add_argument('--headless=new')
   end
+
+  setup do
+    I18n.locale = :ja
+  end
 end
