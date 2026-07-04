@@ -7,7 +7,7 @@ class WorkSettingsControllerTest < ActionDispatch::IntegrationTest
   setup do
     @user = users(:one)
     sign_in @user
-    
+
     # @user に紐づくレコードがなければ作成する
     @work_setting = @user.work_settings.first || @user.work_settings.create!(day_of_week: 0)
   end
