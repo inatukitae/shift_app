@@ -1,12 +1,14 @@
-<% content_for :title, "Editing staff" %>
+<% content_for :title, "スタッフ情報の編集" %>
 
-<h1>Editing staff</h1>
+<h1>スタッフ情報の編集</h1>
+
+<%# 現在の情報を確認用に表示する場合 %>
 
 <%= render "form", staff: @staff %>
 
 <br>
 
 <div>
-  <%= link_to "Show this staff", @staff %> |
-  <%= link_to "Back to staffs", staffs_path %>
+  <%= link_to "詳細を表示", @staff %> |
+  <%= link_to "スタッフ一覧に戻る", staffs_path %>
 </div>

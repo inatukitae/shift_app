@@ -1,84 +1,127 @@
-<h1>必要人数設定</h1>
+<h2 style="border-bottom: 2px solid #333; padding-bottom: 10px;">必要人数設定</h2>
 
+<div style="display: flex; gap: 20px; align-items: start; width: 100%; margin-top: 20px;">
 
-<h2>シフト枠一覧</h2>
-<% (0..6).each do |wday| %>
-    
-  <h3><%= I18n.t('date.day_names')[wday] %></h3>
-  <table border="1" style="border-collapse: collapse; width: 500px;">
-    <tr style="background-color: #f2f2f2;">
-      <th>増加開始時間</th>
-      <th>減少終了時間</th>
-      <th>シフト枠</th>
-      <th>必要人数差分</th>
-      <th>勤務時間</th>
-      <th>操作</th>
-    </tr>
-    <% 
-      increases = @increase_data[wday] || []
-      decreases = @decrease_data[wday] || []
-      max_rows = [increases.length, decreases.length].max
-    %>
-    <% (0...max_rows).each do |i| %>
-  <% inc = increases[i] %>
-  <% dec = decreases[i] %>
-  <tr>
-    <td style="text-align: center;"><%= inc ? inc[:time] : "" %></td>
-    <td style="text-align: center;"><%= dec ? dec[:time] : "" %></td>
-    <td style="text-align: center;"><%= inc && dec ? "#{inc[:time]} ～ #{dec[:time]}" : "" %></td>
-    <td style="text-align: center;"><%= inc ? "#{@diff_data[wday][inc[:time]]} 人" : "" %></td>
-    
+  <%# ==================== 左カラム：薬剤師 ==================== %>
+  <div style="flex: 1; min-width: 0; padding: 20px; border: 2px solid #e6f2ff; border-radius: 10px; background: #fff;">
+    <h2 style="background: #e6f2ff; color: #0056b3; padding: 10px; border-radius: 5px; margin-top: 0; font-size: 1.3em; text-align: center;">
+      【薬剤師】必要人数設定
+    </h2>
 
+    <% (0..6).each do |wday| %>
+      <% wday_name = ["日", "月", "火", "水", "木", "金", "土"][wday] %>
+      <h3 style="border-left: 4px solid #0056b3; padding-left: 8px; margin-top: 25px; margin-bottom: 10px; color: #333;"><%= wday_name %>曜日</h3>
+      
+      <table border="1" style="border-collapse: collapse; width: 100%; text-align: center; font-size: 0.85em; border-color: #eee;">
+        <thead>
+          <tr style="background: #f8f9fa; color: #555;">
+            <th style="padding: 6px;">時間帯</th>
+            <th style="padding: 6px;">必要人数</th>
+            <th style="padding: 6px;">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if @required_staff_settings.present? && @required_staff_settings[wday].present? %>
+            <%# job_typeカラムが存在する場合は「薬剤師」で絞り込み、ない場合は全表示 %>
+            <% pharmacist_data = @required_staff_settings[wday].select { |s| s.respond_to?(:job_type) ? s.job_type == "薬剤師" : true } %>
+            
+            <% if pharmacist_data.any? %>
+              <% pharmacist_data.each do |setting| %>
+                <tr>
+                  <td style="padding: 8px; font-weight: bold; color: #0056b3;">
+                    <%= "#{setting.start_time&.strftime('%H:%M')} ～ #{setting.end_time&.strftime('%H:%M')}" rescue "08:45 ～ 19:00" %>
+                  </td>
+                  <td style="padding: 8px;"><%= setting.required_count rescue "1" %>人</td>
+                  <td style="padding: 8px;">
+                    <%= link_to "編集", edit_required_staff_setting_path(setting), style: "color: #0056b3; text-decoration: none;" rescue "編集" %> |
+                    <%= link_to "削除", setting, method: :delete, data: { confirm: "削除しますか？" }, style: "color: #d32f2f; text-decoration: none;" rescue "削除" %>
+                  </td>
+                </tr>
+              <% end %>
+            <% else %>
+              <tr><td colspan="3" style="padding: 15px; color: #999; background: #fafafa;">設定されたシフト枠はありません</td></tr>
+            <% end %>
+          <% else %>
+            <tr><td colspan="3" style="padding: 15px; color: #999; background: #fafafa;">設定されたシフト枠はありません</td></tr>
+          <% end %>
+        </tbody>
+      </table>
 
-
-    <%# 勤務時間の表示 %>
-    <td style="text-align: center;">
-      <%# キーを "#{wday}_#{inc[:time]}" から "#{wday}_#{i}" に変更 %>
-      <% pair_key = "#{wday}_#{i}" %>
-      <% if @working_hours && @working_hours[pair_key] %>
-        <% total = @working_hours[pair_key] %>
-        <%= "#{total / 60}時間#{total % 60}分" %>
-      <% end %>
-    </td>
-    
-    <td style="text-align: center;">
-      <% if inc&.dig(:id).present? %>
-        <%= button_to '削除', required_staff_setting_path(inc[:id]), method: :delete, data: { confirm: '削除しますか？' } %>
-      <% end %>
-    </td>
-  </tr>
-<% end %>
-  </table>
-<% end %>
-
-<h2>曜日別設定一覧</h2>
-
-<% (0..6).each do |wday| %>
-  <h3><%= I18n.t('date.day_names')[wday] %></h3>
-  
-  <table border="1" style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
-    <tr><th>時間帯</th><th>必要人数</th><th>操作</th></tr>
-    <% (@settings[wday] || []).each do |setting| %>
-      <tr>
-        <td><%= setting.start_time.strftime("%H:%M") %> 〜 <%= setting.end_time.strftime("%H:%M") %></td>
-        <td><%= setting.required_count %> 人</td>
-        <td>
-          <%= link_to '編集', edit_required_staff_setting_path(setting) %> |
-          <%= button_to '削除', required_staff_setting_path(setting), method: :delete, data: { confirm: '本当に削除しますか？' } %>
-        </td>
-      </tr>
-    <% end %>
-  </table>
-
-  <%# その曜日専用の追加フォーム %>
-  <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 30px; border: 1px solid #dee2e6;">
-    <strong><%= I18n.t('date.day_names')[wday] %>に枠を追加:</strong>
-    <%= form_with model: @new_setting, local: true do |f| %>
-      <%= f.hidden_field :day_of_week, value: wday %>
-      <%= f.time_field :start_time, required: true %> 〜
-      <%= f.time_field :end_time, required: true %>
-      <%= f.number_field :required_count, placeholder: "人数", min: 0, required: true, style: "width: 60px;" %>
-      <%= f.submit "追加" %>
+      <%# --- 薬剤師用：新規追加フォーム --- %>
+      <div style="margin-top: 10px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #eef0f2; font-size: 0.85em;">
+        <%= form_with(model: RequiredStaffSetting.new, local: true) do |f| %>
+          <%= f.hidden_field :day_of_week, value: wday %>
+          <%= f.hidden_field :job_type, value: "薬剤師" %>
+          
+          <span style="font-weight: bold; margin-right: 5px;"><%= wday_name %>曜日に枠を追加:</span>
+          <%= f.time_field :start_time, style: "padding: 4px; border: 1px solid #ccc; border-radius: 4px;" %> ～
+          <%= f.time_field :end_time, style: "padding: 4px; border: 1px solid #ccc; border-radius: 4px;" %>
+          <%= f.number_field :required_count, placeholder: "人数", style: "width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; text-align: center;" %>
+          <%= f.submit "追加", style: "background: #e6f2ff; color: #0056b3; border: 1px solid #b3d7ff; padding: 4px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;" %>
+        <% end %>
+      </div>
     <% end %>
   </div>
-<% end %>
+
+  <%# ==================== 右カラム：事務員 ==================== %>
+  <div style="flex: 1; min-width: 0; padding: 20px; border: 2px solid #fff2e6; border-radius: 10px; background: #fff;">
+    <h2 style="background: #fff2e6; color: #d97706; padding: 10px; border-radius: 5px; margin-top: 0; font-size: 1.3em; text-align: center;">
+      【事務員】必要人数設定
+    </h2>
+
+    <% (0..6).each do |wday| %>
+      <% wday_name = ["日", "月", "火", "水", "木", "金", "土"][wday] %>
+      <h3 style="border-left: 4px solid #d97706; padding-left: 8px; margin-top: 25px; margin-bottom: 10px; color: #333;"><%= wday_name %>曜日</h3>
+      
+      <table border="1" style="border-collapse: collapse; width: 100%; text-align: center; font-size: 0.85em; border-color: #eee;">
+        <thead>
+          <tr style="background: #f8f9fa; color: #555;">
+            <th style="padding: 6px;">時間帯</th>
+            <th style="padding: 6px;">必要人数</th>
+            <th style="padding: 6px;">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if @required_staff_settings.present? && @required_staff_settings[wday].present? %>
+            <%# データベースにjob_typeカラムがある前提で事務員を抽出 %>
+            <% clerk_data = @required_staff_settings[wday].select { |s| s.respond_to?(:job_type) ? s.job_type == "事務員" : false } %>
+            
+            <% if clerk_data.any? %>
+              <% clerk_data.each do |setting| %>
+                <tr>
+                  <td style="padding: 8px; font-weight: bold; color: #d97706;">
+                    <%= "#{setting.start_time&.strftime('%H:%M')} ～ #{setting.end_time&.strftime('%H:%M')}" rescue "09:30 ～ 19:30" %>
+                  </td>
+                  <td style="padding: 8px;"><%= setting.required_count rescue "1" %>人</td>
+                  <td style="padding: 8px;">
+                    <%= link_to "編集", edit_required_staff_setting_path(setting), style: "color: #0056b3; text-decoration: none;" rescue "編集" %> |
+                    <%= link_to "削除", setting, method: :delete, data: { confirm: "削除しますか？" }, style: "color: #d32f2f; text-decoration: none;" rescue "削除" %>
+                  </td>
+                </tr>
+              <% end %>
+            <% else %>
+              <tr><td colspan="3" style="padding: 15px; color: #999; background: #fafafa;">設定されたシフト枠はありません</td></tr>
+            <% end %>
+          <% else %>
+            <tr><td colspan="3" style="padding: 15px; color: #999; background: #fafafa;">設定されたシフト枠はありません</td></tr>
+          <% end %>
+        </tbody>
+      </table>
+
+      <%# --- 事務員用：新規追加フォーム --- %>
+      <div style="margin-top: 10px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #eef0f2; font-size: 0.85em;">
+        <%= form_with(model: RequiredStaffSetting.new, local: true) do |f| %>
+          <%= f.hidden_field :day_of_week, value: wday %>
+          <%= f.hidden_field :job_type, value: "事務員" %>
+          
+          <span style="font-weight: bold; margin-right: 5px;"><%= wday_name %>曜日に枠を追加:</span>
+          <%= f.time_field :start_time, style: "padding: 4px; border: 1px solid #ccc; border-radius: 4px;" %> ～
+          <%= f.time_field :end_time, style: "padding: 4px; border: 1px solid #ccc; border-radius: 4px;" %>
+          <%= f.number_field :required_count, placeholder: "人数", style: "width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; text-align: center;" %>
+          <%= f.submit "追加", style: "background: #fff2e6; color: #d97706; border: 1px solid #ffd8b3; padding: 4px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;" %>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+
+</div>

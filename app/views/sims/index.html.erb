@@ -1,5 +1,7 @@
 <h2>シフト作成</h2>
 
+<%= link_to 'トップページへ戻る', root_path %>
+
 <%= form_with url: new_sim_path, method: :get, local: true do |f| %>
   <div style="margin-bottom: 20px;">
     <%= f.label :start_date, "開始日:" %>

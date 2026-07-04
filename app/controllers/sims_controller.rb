@@ -1,214 +1,107 @@
 class SimsController < ApplicationController
-def index
-  @past_shifts = ShiftRule.order(date: :desc).group_by(&:date)
+  before_action :authenticate_user! # 💡 ログインを必須にする
+  require 'holidays'
 
-  # batch_id が存在しない古いエラーデータを無視し、batch_idごとにグループ化する
-  @saved_periods = ShiftRule.where.not(batch_id: nil)
-                            .group_by(&:batch_id)
-                            .map do |batch_id, shifts|
-                              { 
-                                batch_id: batch_id,
-                                start: shifts.map(&:date).min, # バッチ内の最初の開始日
-                                end: shifts.map(&:date).max    # バッチ内の最後の終了日
-                              }
-                            end
-                            .sort_by { |p| p[:start] }.reverse # 日付が新しい順に並び替え
-  
-  @saved_periods ||= []
-end
+  def index
+    # 💡 自分の管理下のスタッフのシフト（ShiftRule）だけを取得する
+    staff_ids = current_user.staffs.pluck(:id)
+    
+    @past_shifts = ShiftRule.where(staff_id: staff_ids).order(date: :desc).group_by(&:date)
 
-def show
-  @start_date = Date.parse(params[:start_date])
-  @end_date = Date.parse(params[:end_date])
-  @days = (@start_date..@end_date).to_a
-  @staffs = Staff.all
-  
-  # スタッフIDと日付をキーにしてシフト情報を取得できるハッシュを作成
-  # 例: @shift_map[[staff_id, date]] = "08:45-13:00"
-  @shift_map = {}
-  ShiftRule.where(date: @start_date..@end_date).each do |s|
-    @shift_map[[s.staff_id, s.date]] = "#{s.start_time.strftime('%H:%M')}-#{s.end_time.strftime('%H:%M')}"
+    @saved_periods = ShiftRule.where(staff_id: staff_ids).where.not(batch_id: nil)
+                              .group_by(&:batch_id)
+                              .map do |batch_id, shifts|
+                                { 
+                                  batch_id: batch_id,
+                                  start: shifts.map(&:date).min,
+                                  end: shifts.map(&:date).max
+                                }
+                              end
+                              .sort_by { |p| p[:start] }.reverse
+    
+    @saved_periods ||= []
   end
-end
+
+  def show
+    @start_date = Date.parse(params[:start_date])
+    @end_date = Date.parse(params[:end_date])
+    @days = (@start_date..@end_date).to_a
+    
+    # 💡 Staff.all ではなく、自分のスタッフだけに限定
+    @staffs = current_user.staffs
+    @pharmacists = current_user.staffs.where(job_type: "薬剤師") 
+    @clerks = current_user.staffs.where(job_type: "事務員")
+    
+    @shift_map = {}
+    
+    # 💡 自分のスタッフのシフトだけを抽出
+    staff_ids = @staffs.pluck(:id)
+    ShiftRule.where(staff_id: staff_ids, date: @start_date..@end_date).each do |s|
+      @shift_map[[s.staff_id, s.date]] = "#{s.start_time.strftime('%H:%M')}-#{s.end_time.strftime('%H:%M')}"
+    end
+  end
 
   def new
     @start_date = params[:start_date].present? ? Date.parse(params[:start_date]) : Date.new(2026, 6, 11)
     @end_date = params[:end_date].present? ? Date.parse(params[:end_date]) : @start_date.next_month.prev_day
-    
     @calendar_days = (@start_date.beginning_of_week(:sunday)..@end_date.end_of_week(:sunday)).to_a
-    @staffs = Staff.all
     
-    # ビュー表示用とカレンダー判定用の両方を用意
-    @work_settings_list = WorkSetting.order(:day_of_week)
-    @work_settings_map = WorkSetting.all.index_by(&:day_of_week)
-    @settings = RequiredStaffSetting.all.group_by(&:day_of_week)
+    # 💡 自分のスタッフ、設定データだけに限定
+    @staffs = current_user.staffs
+    @pharmacists = current_user.staffs.where(job_type: "薬剤師")
+    @clerks = current_user.staffs.where(job_type: "事務員")
 
-    @staff_assignments = {} 
+    @work_settings_list = current_user.work_settings.order(:day_of_week)
+    @work_settings_map = current_user.work_settings.index_by(&:day_of_week)
 
-    # --- 修正箇所1: 希望休の取得を割り当てループの前に移動 ---
-    @shift_requests = ShiftRequest.includes(:staff).order(request_date: :asc)
+    # 💡 自分のスタッフの希望休だけに限定
+    staff_ids = @staffs.pluck(:id)
+    @shift_requests = ShiftRequest.where(staff_id: staff_ids).includes(:staff).order(request_date: :asc)
     @requests_by_date = @shift_requests.group_by(&:request_date)
-    
-    # 「公休」がある週のスタッフのみ除外するハッシュを作成
-    has_kokyu_in_week = {}
-    @shift_requests.each do |req|
-      if req.request_type_label == "公休"
-        week_start = req.request_date.beginning_of_week(:sunday)
-        has_kokyu_in_week[[req.staff_id, week_start]] = true
-      end
+
+    @frame_data = {}
+    @frame_data["薬剤師"] = prepare_frame_data("薬剤師")
+    @frame_data["事務員"] = prepare_frame_data("事務員")
+
+    @pharmacist_results = generate_job_type_shifts(@pharmacists, @frame_data["薬剤師"])
+    @clerk_results = generate_job_type_shifts(@clerks, @frame_data["事務員"])
+
+    @pharmacist_assignments            = @pharmacist_results[:assignments]
+    @pharmacist_work_days              = @pharmacist_results[:work_days]
+    @pharmacist_total_working_minutes  = @pharmacist_results[:total_working_minutes]
+
+    @clerk_assignments                 = @clerk_results[:assignments]
+    @clerk_work_days                   = @clerk_results[:work_days]
+    @clerk_total_working_minutes       = @clerk_results[:total_working_minutes]
+
+    @staff_assignments = {}
+    (@pharmacist_assignments.keys + @clerk_assignments.keys).uniq.each do |date|
+      @staff_assignments[date] = (@pharmacist_assignments[date] || []) + (@clerk_assignments[date] || [])
     end
-
-    @calendar_days.each_slice(7) do |week|
-      week_start = week.first.beginning_of_week(:sunday)
-      
-      # 1. すべての曜日を対象にして、定休日だけをフィルタリング
-      all_possible_dates = week.select do |d| 
-        setting = @work_settings_map[d.wday]
-        !(setting&.is_closed)
-      end
-      
-      next if all_possible_dates.empty?
-
-      # 「公休」があるスタッフのみをその週のプールから除外
-      available_staffs = @staffs.reject { |s| has_kokyu_in_week[[s.id, week_start]] }
-      
-      # ランダム性を担保するためスタッフをシャッフル
-      staff_pool = available_staffs.shuffle
-
-      # --- 修正箇所2: 休みが少ない日を優先して割り当てるロジック ---
-      staff_pool.each do |staff|
-        # a. 各営業日の現在の「休み人数（希望休 + アサイン済）」を算出
-        date_counts = all_possible_dates.map do |date|
-          req_count = @requests_by_date[date] ? @requests_by_date[date].size : 0
-          assign_count = @staff_assignments[date] ? @staff_assignments[date].size : 0
-          { date: date, count: req_count + assign_count }
-        end
-        
-        # b. 休み人数の最小値を取得（誰も休んでいない日があれば0になる）
-        min_count = date_counts.map { |dc| dc[:count] }.min
-        
-        # c. 最小値と一致する日（候補日）だけを抽出
-        candidate_dates = date_counts.select { |dc| dc[:count] == min_count }.map { |dc| dc[:date] }
-        
-        # d. 候補の中からランダムに1日を選び、割り当てを確定
-        target_date = candidate_dates.sample
-        
-        @staff_assignments[target_date] ||= []
-        @staff_assignments[target_date] << staff
-      end
-    end
-  
-    # 以下の設定データ作成処理はそのまま
-    @settings = RequiredStaffSetting.order(:start_time).group_by(&:day_of_week)
-    @increase_data = {}
-    @decrease_data = {}
-    @diff_data = {}
-    @working_hours = {}
-
-    (0..6).each do |wday|
-      increases = RequiredStaffSetting.get_increase_points_with_ids(wday)
-      decreases = RequiredStaffSetting.get_decrease_points(wday)
-      @increase_data[wday] = increases
-      @decrease_data[wday] = decreases
-      @diff_data[wday] = {}
-      
-      daily_settings = @settings[wday] || []
-      
-      increases.each_with_index do |inc, i|
-        dec = decreases[i]
-        
-        current_required = daily_settings.select do |s| 
-          s.start_time.strftime("%H:%M") <= inc[:time] && s.end_time.strftime("%H:%M") > inc[:time]
-        end.sum(&:required_count)
-        
-        prev_count = daily_settings.select{|s| s.end_time.strftime("%H:%M") <= inc[:time]}.sum(&:required_count)
-        @diff_data[wday][inc[:time]] = current_required - prev_count
-        
-        if dec.present?
-          start_t = Time.parse(inc[:time])
-          end_t = Time.parse(dec[:time])
-          total_minutes = ((end_t - start_t) / 60).to_i
-          break_time = total_minutes >= 480 ? 60 : (total_minutes > 360 ? 45 : 0)
-          @working_hours["#{wday}_#{i}"] = total_minutes - break_time
-        end
-      end
-    end
-
-    @staff_work_days = {}
-    @staff_total_working_minutes = Hash.new(0) # 各スタッフの合計勤務時間（分）を保持するハッシュ
-    
-    # ループ内で使うための「定休日ではない有効な営業日」のリスト
-    active_dates = @calendar_days.select { |d| d >= @start_date && d <= @end_date && !(@work_settings_map[d.wday]&.is_closed) }
-
-    # 1. 各日のシフト枠割り当てを再現し、該当する枠の勤務時間を集計
-    (@start_date..@end_date).each do |date|
-      # 定休日はスキップ
-      next if @work_settings_map[date.wday]&.is_closed
-      
-      assigned_holidays = @staff_assignments[date.to_date] || []
-      increases = @increase_data[date.wday] || []
-      decreases = @decrease_data[date.wday] || []
-      num_of_slots = [increases.length, decreases.length].max
-      
-      # 出勤可能なスタッフを取得（休みを除外）
-      available = @staffs.reject { |s| assigned_holidays.include?(s) || (@requests_by_date[date.to_date] || []).map(&:staff_id).include?(s.id) }
-      next if available.empty?
-      
-      current_index = active_dates.index(date) || 0
-      rotated = available.rotate(current_index)
-      
-      (0...num_of_slots).each do |i|
-        # シフト枠確認と全く同じ条件でスタッフを特定
-        staff = if available.size == 1
-                  (i == 1) ? rotated[0] : nil
-                else
-                  rotated[i]
-                end
-        
-        if staff
-          # 曜日(wday)と枠インデックス(i)をキーにして、設定された勤務時間(分)を加算
-          pair_key = "#{date.wday}_#{i}"
-          @staff_total_working_minutes[staff.id] += @working_hours[pair_key] || 0
-        end
-      end
-    end
-
-    # 2. 出勤日数のカウント（既存のロジックのまま）
-    @staffs.each do |staff|
-      count = 0
-      
-      (@start_date..@end_date).each do |date|
-        next if @work_settings_map[date.wday]&.is_closed
-        is_requested_off = (@requests_by_date[date.to_date] || []).any? { |r| r.staff_id == staff.id }
-        next if is_requested_off
-        assigned_holidays = @staff_assignments[date.to_date] || []
-        is_assigned_holiday = assigned_holidays.include?(staff)
-        next if is_assigned_holiday
-
-        count += 1
-      end
-      
-      @staff_work_days[staff.id] = count
-    end
-
+    @staff_work_days = @pharmacist_work_days.merge(@clerk_work_days)
+    @staff_total_working_minutes = @pharmacist_total_working_minutes.merge(@clerk_total_working_minutes)
   end
 
   def save_shifts
-    # 保存の目印としてユニークなIDを作成
     batch_id = Time.now.to_i.to_s 
+    
+    # 💡 不正な staff_id が送られてこないよう、自分のスタッフのIDリストを取得
+    valid_staff_ids = current_user.staffs.pluck(:id)
 
     params[:shifts].each do |date_str, staffs|
       date = Date.parse(date_str)
       staffs.each do |staff_id, times|
-        shift = ShiftRule.find_or_initialize_by(date: date, staff_id: staff_id)
         
-        # 属性を更新
+        # 💡 もし他人のスタッフIDが送られてきたらスキップする（セキュリティ対策）
+        next unless valid_staff_ids.include?(staff_id.to_i)
+        
+        shift = ShiftRule.find_or_initialize_by(date: date, staff_id: staff_id)
         shift.attributes = {
           day_of_week: date.wday,
           start_time: times[:start],
           end_time: times[:end],
           staff_count: 1,
-          batch_id: batch_id # ★追加：同じタイミングで保存したデータは同じIDになる
+          batch_id: batch_id
         }
         shift.save
       end
@@ -218,10 +111,186 @@ end
   end
 
   def destroy_batch
-    ShiftRule.where(batch_id: params[:batch_id]).destroy_all
+    # 💡 自分のスタッフのシフトに限定して削除
+    staff_ids = current_user.staffs.pluck(:id)
+    ShiftRule.where(staff_id: staff_ids, batch_id: params[:batch_id]).destroy_all
+    
     redirect_to sims_path, notice: "シフトセットを削除しました。"
   end
 
+  def is_holiday_or_closed?(date, work_settings_map)
+    setting = work_settings_map[date.wday]
+    is_closed = setting&.is_closed
+    is_holiday = Holidays.on(date, :jp).any?
+    
+    if is_holiday && !setting&.is_holiday_open
+      return true
+    end
+    is_closed
+  end
 
-  
+  def is_holiday?(date)
+    Holidays.on(date, :jp).any?
+  end
+
+  def should_be_closed?(date, setting)
+    return true if setting&.is_closed && !setting&.is_holiday_open
+    return true if setting&.is_closed
+    false
+  end
+
+  private
+
+  def prepare_frame_data(job_type)
+    increase_data = {}
+    decrease_data = {}
+    diff_data = {}
+    working_hours = {}
+
+    # 💡 ここも `RequiredStaffSetting.where` ではなく、自分の設定のみ取得する
+    settings_for_job = current_user.required_staff_settings.where(job_type: job_type).order(:start_time).group_by(&:day_of_week)
+
+    (0..6).each do |wday|
+      daily_settings = settings_for_job[wday] || []
+      
+      times = daily_settings.map { |s| [s.start_time.strftime("%H:%M"), s.end_time.strftime("%H:%M")] }.flatten.uniq.sort
+      
+      increases = []
+      decreases = []
+      current_count = 0
+      
+      times.each do |t|
+        count = daily_settings.select { |s| s.start_time.strftime("%H:%M") <= t && s.end_time.strftime("%H:%M") > t }.sum(&:required_count)
+        
+        if count > current_count
+          (count - current_count).times { increases << { time: t } }
+        elsif count < current_count
+          (current_count - count).times { decreases << { time: t } }
+        end
+        current_count = count
+      end
+      
+      increase_data[wday] = increases
+      decrease_data[wday] = decreases
+      diff_data[wday] = {}
+      
+      increases.each_with_index do |inc, i|
+        dec = decreases[i]
+        
+        current_required = daily_settings.select { |s| s.start_time.strftime("%H:%M") <= inc[:time] && s.end_time.strftime("%H:%M") > inc[:time] }.sum(&:required_count)
+        prev_count = daily_settings.select { |s| s.end_time.strftime("%H:%M") <= inc[:time] }.sum(&:required_count)
+        
+        diff_data[wday][inc[:time]] = current_required - prev_count
+        
+        if dec.present?
+          start_t = Time.parse(inc[:time])
+          end_t = Time.parse(dec[:time])
+          total_minutes = ((end_t - start_t) / 60).to_i
+          break_time = total_minutes >= 480 ? 60 : (total_minutes > 360 ? 45 : 0)
+          working_hours["#{wday}_#{i}"] = total_minutes - break_time
+        end
+      end
+    end
+
+    { increase: increase_data, decrease: decrease_data, diff: diff_data, hours: working_hours }
+  end
+
+  # generate_job_type_shifts メソッドは、引数として受け取る target_staffs が
+  # すでに current_user のスタッフに絞り込まれているため、そのままで安全に動きます！
+  def generate_job_type_shifts(target_staffs, frame)
+    staff_assignments = {}
+    
+    job_type_requests = ShiftRequest.where(staff_id: target_staffs.map(&:id)).includes(:staff)
+    requests_by_date = job_type_requests.group_by(&:request_date)
+
+    has_kokyu_in_week = {}
+    job_type_requests.each do |req|
+      if req.request_type_label == "公休"
+        week_start = req.request_date.beginning_of_week(:sunday)
+        has_kokyu_in_week[[req.staff_id, week_start]] = true
+      end
+    end
+
+    @calendar_days.each_slice(7) do |week|
+      week_start = week.first.beginning_of_week(:sunday)
+      
+      all_possible_dates = week.select do |d| 
+        setting = @work_settings_map[d.wday]
+        !(setting&.is_closed)
+      end
+      
+      next if all_possible_dates.empty?
+
+      available_staffs = target_staffs.reject { |s| has_kokyu_in_week[[s.id, week_start]] }
+      staff_pool = available_staffs.shuffle
+
+      staff_pool.each do |staff|
+        date_counts = all_possible_dates.map do |date|
+          req_count = requests_by_date[date] ? requests_by_date[date].size : 0
+          assign_count = staff_assignments[date] ? staff_assignments[date].size : 0
+          { date: date, count: req_count + assign_count }
+        end
+        
+        min_count = date_counts.map { |dc| dc[:count] }.min
+        candidate_dates = date_counts.select { |dc| dc[:count] == min_count }.map { |dc| dc[:date] }
+        target_date = candidate_dates.sample
+        
+        staff_assignments[target_date] ||= []
+        staff_assignments[target_date] << staff
+      end
+    end
+
+    staff_total_working_minutes = Hash.new(0)
+    active_dates = @calendar_days.select { |d| d >= @start_date && d <= @end_date && !(@work_settings_map[d.wday]&.is_closed) }
+
+    (@start_date..@end_date).each do |date|
+      next if @work_settings_map[date.wday]&.is_closed
+      
+      assigned_holidays = staff_assignments[date.to_date] || []
+      increases = frame[:increase][date.wday] || []
+      decreases = frame[:decrease][date.wday] || []
+      num_of_slots = [increases.length, decreases.length].max
+      
+      available = target_staffs.reject { |s| assigned_holidays.include?(s) || (requests_by_date[date.to_date] || []).map(&:staff_id).include?(s.id) }
+      next if available.empty?
+      
+      current_index = active_dates.index(date) || 0
+      rotated = available.rotate(current_index)
+      
+      (0...num_of_slots).each do |i|
+        staff = if available.size == 1
+                  (i == 1) ? rotated[0] : nil
+                else
+                  rotated[i]
+                end
+        
+        if staff
+          pair_key = "#{date.wday}_#{i}"
+          staff_total_working_minutes[staff.id] += frame[:hours][pair_key] || 0
+        end
+      end
+    end
+
+    staff_work_days = {}
+    target_staffs.each do |staff|
+      count = 0
+      (@start_date..@end_date).each do |date|
+        next if @work_settings_map[date.wday]&.is_closed
+        is_requested_off = (requests_by_date[date.to_date] || []).any? { |r| r.staff_id == staff.id }
+        next if is_requested_off
+        assigned_holidays = staff_assignments[date.to_date] || []
+        is_assigned_holiday = assigned_holidays.include?(staff)
+        next if is_assigned_holiday
+
+        count += 1
+      end
+      staff_work_days[staff.id] = count
+    end
+
+    {
+      assignments: staff_assignments,
+      total_working_minutes: staff_total_working_minutes,
+      work_days: staff_work_days
+    }
+  end
 end

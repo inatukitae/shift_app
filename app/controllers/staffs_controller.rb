@@ -3,7 +3,7 @@ class StaffsController < ApplicationController
 
   # GET /staffs or /staffs.json
   def index
-    @staffs = Staff.all
+    @staffs = current_user.staffs
   end
 
   # GET /staffs/1 or /staffs/1.json
@@ -21,7 +21,7 @@ class StaffsController < ApplicationController
 
   # POST /staffs or /staffs.json
   def create
-    @staff = Staff.new(staff_params)
+    @staff = current_user.staffs.build(staff_params)
 
     respond_to do |format|
       if @staff.save
@@ -65,6 +65,6 @@ class StaffsController < ApplicationController
 
     # Only allow a list of trusted parameters through.
     def staff_params
-      params.require(:staff).permit(:name)
+      params.require(:staff).permit(:name,:job_type)
     end
 end

@@ -1,16 +1,28 @@
 <p style="color: green"><%= notice %></p>
 
-<% content_for :title, "Staffs" %>
+<% content_for :title, "スタッフ一覧" %>
 
-<h1>Staffs</h1>
+<h1>スタッフ一覧</h1>
+
+<%= link_to 'トップページへ戻る', root_path %>
 
 <div id="staffs">
   <% @staffs.each do |staff| %>
-    <%= render staff %>
+    <div id="<%= dom_id staff %>">
+      <p>
+        <strong>名前:</strong>
+        <%= staff.name %>
+      </p>
+      <p>
+        <strong>職種:</strong>
+        <%= staff.job_type %>
+      </p>
+    </div>
     <p>
-      <%= link_to "Show this staff", staff %>
+      <%= link_to "詳細を表示", staff %>
     </p>
   <% end %>
 </div>
 
-<%= link_to "New staff", new_staff_path %>
+<%= link_to "新規スタッフ登録", new_staff_path %>
+

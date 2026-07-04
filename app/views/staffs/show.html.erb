@@ -1,10 +1,15 @@
-<p style="color: green"><%= notice %></p>
-
-<%= render @staff %>
-
 <div>
-  <%= link_to "Edit this staff", edit_staff_path(@staff) %> |
-  <%= link_to "Back to staffs", staffs_path %>
-
-  <%= button_to "Destroy this staff", @staff, method: :delete %>
+  <p>
+    <strong>名前:</strong>
+    <%= @staff.name %>
+  </p>
+  
+  <p>
+    <strong>職種:</strong>
+    <%= @staff.job_type %>
+  </p>
 </div>
+
+<%= link_to "編集する", edit_staff_path(@staff) %> |
+<%= link_to "削除する", @staff, data: { turbo_method: :delete, turbo_confirm: "本当に削除してもよろしいですか？" } %> |
+<%= link_to "スタッフ一覧に戻る", staffs_path %>
