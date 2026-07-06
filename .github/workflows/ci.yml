@@ -56,7 +56,7 @@ jobs:
 
       # 1. GitHub Actions公式のアクションで最新のChromeとChromedriverを確実にセットアップ
       - name: Setup Chrome & Chromedriver
-        uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@v2
         with:
           chrome-version: stable
 
